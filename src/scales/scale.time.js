@@ -1,12 +1,13 @@
-import adapters from '../core/core.adapters';
-import {isFinite, isNullOrUndef, mergeIf, valueOrDefault} from '../helpers/helpers.core';
-import {toRadians, isNumber, _limitValue} from '../helpers/helpers.math';
-import Scale from '../core/core.scale';
-import {_arrayUnique, _filterBetween, _lookup} from '../helpers/helpers.collection';
+import adapters from '../core/core.adapters.js';
+import {callback as call, isFinite, isNullOrUndef, mergeIf, valueOrDefault} from '../helpers/helpers.core.js';
+import {toRadians, isNumber, _limitValue} from '../helpers/helpers.math.js';
+import Scale from '../core/core.scale.js';
+import {_arrayUnique, _filterBetween, _lookup} from '../helpers/helpers.collection.js';
 
 /**
- * @typedef { import("../core/core.adapters").Unit } Unit
+ * @typedef { import('../core/core.adapters.js').TimeUnit } Unit
  * @typedef {{common: boolean, size: number, steps?: number}} Interval
+ * @typedef { import('../core/core.adapters.js').DateAdapter } DateAdapter
  */
 
 /**
@@ -27,7 +28,7 @@ const INTERVALS = {
 /**
  * @type {Unit[]}
  */
-const UNITS = /** @type Unit[] */(Object.keys(INTERVALS));
+const UNITS = /** @type Unit[] */ /* #__PURE__ */ (Object.keys(INTERVALS));
 
 /**
  * @param {number} a
@@ -48,18 +49,17 @@ function parse(scale, input) {
   }
 
   const adapter = scale._adapter;
-  const options = scale.options.time;
-  const {parser, round, isoWeekday} = options;
+  const {parser, round, isoWeekday} = scale._parseOpts;
   let value = input;
 
   if (typeof parser === 'function') {
     value = parser(value);
   }
 
-  // Only parse if its not a timestamp already
+  // Only parse if it's not a timestamp already
   if (!isFinite(value)) {
     value = typeof parser === 'string'
-      ? adapter.parse(value, parser)
+      ? adapter.parse(value, /** @type {Unit} */ (parser))
       : adapter.parse(value);
   }
 
@@ -198,6 +198,49 @@ function ticksFromTimestamps(scale, values, majorUnit) {
 
 export default class TimeScale extends Scale {
 
+  static id = 'time';
+
+  /**
+   * @type {any}
+   */
+  static defaults = {
+    /**
+     * Scale boundary strategy (bypassed by min/max time options)
+     * - `data`: make sure data are fully visible, ticks outside are removed
+     * - `ticks`: make sure ticks are fully visible, data outside are truncated
+     * @see https://github.com/chartjs/Chart.js/pull/4556
+     * @since 2.7.0
+     */
+    bounds: 'data',
+
+    adapters: {},
+    time: {
+      parser: false, // false == a pattern string from or a custom callback that converts its argument to a timestamp
+      unit: false, // false == automatic or override with week, month, year, etc.
+      round: false, // none, or override with week, month, year, etc.
+      isoWeekday: false, // override week start day
+      minUnit: 'millisecond',
+      displayFormats: {}
+    },
+    ticks: {
+      /**
+       * Ticks generation input values:
+       * - 'auto': generates "optimal" ticks based on scale size and time options.
+       * - 'data': generates ticks from data (including labels from data {t|x|y} objects).
+       * - 'labels': generates ticks from user given `data.labels` values ONLY.
+       * @see https://github.com/chartjs/Chart.js/pull/4507
+       * @since 2.7.0
+       */
+      source: 'auto',
+
+      callback: false,
+
+      major: {
+        enabled: false
+      }
+    }
+  };
+
   /**
 	 * @param {object} props
 	 */
@@ -217,17 +260,27 @@ export default class TimeScale extends Scale {
     this._majorUnit = undefined;
     this._offsets = {};
     this._normalized = false;
+    this._parseOpts = undefined;
   }
 
-  init(scaleOpts, opts) {
+  init(scaleOpts, opts = {}) {
     const time = scaleOpts.time || (scaleOpts.time = {});
+    /** @type {DateAdapter} */
     const adapter = this._adapter = new adapters._date(scaleOpts.adapters.date);
+
+    adapter.init(opts);
 
     // Backward compatibility: before introducing adapter, `displayFormats` was
     // supposed to contain *all* unit/string pairs but this can't be resolved
     // when loading the scale (adapters are loaded afterward), so let's populate
     // missing formats on update
     mergeIf(time.displayFormats, adapter.formats());
+
+    this._parseOpts = {
+      parser: time.parser,
+      round: time.round,
+      isoWeekday: time.isoWeekday
+    };
 
     super.init(scaleOpts);
 
@@ -256,12 +309,11 @@ export default class TimeScale extends Scale {
   }
 
   determineDataLimits() {
-    const me = this;
-    const options = me.options;
-    const adapter = me._adapter;
+    const options = this.options;
+    const adapter = this._adapter;
     const unit = options.time.unit || 'day';
     // eslint-disable-next-line prefer-const
-    let {min, max, minDefined, maxDefined} = me.getUserBounds();
+    let {min, max, minDefined, maxDefined} = this.getUserBounds();
 
     /**
 		 * @param {object} bounds
@@ -278,12 +330,12 @@ export default class TimeScale extends Scale {
     // If we have user provided `min` and `max` labels / data bounds can be ignored
     if (!minDefined || !maxDefined) {
       // Labels are always considered, when user did not force bounds
-      _applyBounds(me._getLabelBounds());
+      _applyBounds(this._getLabelBounds());
 
       // If `bounds` is `'ticks'` and `ticks.source` is `'labels'`,
       // data bounds are ignored (and don't need to be determined)
       if (options.bounds !== 'ticks' || options.ticks.source !== 'labels') {
-        _applyBounds(me.getMinMax(false));
+        _applyBounds(this.getMinMax(false));
       }
     }
 
@@ -291,8 +343,8 @@ export default class TimeScale extends Scale {
     max = isFinite(max) && !isNaN(max) ? max : +adapter.endOf(Date.now(), unit) + 1;
 
     // Make sure that max is strictly higher than min (required by the timeseries lookup table)
-    me.min = Math.min(min, max - 1);
-    me.max = Math.max(min + 1, max);
+    this.min = Math.min(min, max - 1);
+    this.max = Math.max(min + 1, max);
   }
 
   /**
@@ -314,37 +366,44 @@ export default class TimeScale extends Scale {
 	 * @return {object[]}
 	 */
   buildTicks() {
-    const me = this;
-    const options = me.options;
+    const options = this.options;
     const timeOpts = options.time;
     const tickOpts = options.ticks;
-    const timestamps = tickOpts.source === 'labels' ? me.getLabelTimestamps() : me._generate();
+    const timestamps = tickOpts.source === 'labels' ? this.getLabelTimestamps() : this._generate();
 
     if (options.bounds === 'ticks' && timestamps.length) {
-      me.min = me._userMin || timestamps[0];
-      me.max = me._userMax || timestamps[timestamps.length - 1];
+      this.min = this._userMin || timestamps[0];
+      this.max = this._userMax || timestamps[timestamps.length - 1];
     }
 
-    const min = me.min;
-    const max = me.max;
+    const min = this.min;
+    const max = this.max;
 
     const ticks = _filterBetween(timestamps, min, max);
 
     // PRIVATE
     // determineUnitForFormatting relies on the number of ticks so we don't use it when
     // autoSkip is enabled because we don't yet know what the final number of ticks will be
-    me._unit = timeOpts.unit || (tickOpts.autoSkip
-      ? determineUnitForAutoTicks(timeOpts.minUnit, me.min, me.max, me._getLabelCapacity(min))
-      : determineUnitForFormatting(me, ticks.length, timeOpts.minUnit, me.min, me.max));
-    me._majorUnit = !tickOpts.major.enabled || me._unit === 'year' ? undefined
-      : determineMajorUnit(me._unit);
-    me.initOffsets(timestamps);
+    this._unit = timeOpts.unit || (tickOpts.autoSkip
+      ? determineUnitForAutoTicks(timeOpts.minUnit, this.min, this.max, this._getLabelCapacity(min))
+      : determineUnitForFormatting(this, ticks.length, timeOpts.minUnit, this.min, this.max));
+    this._majorUnit = !tickOpts.major.enabled || this._unit === 'year' ? undefined
+      : determineMajorUnit(this._unit);
+    this.initOffsets(timestamps);
 
     if (options.reverse) {
       ticks.reverse();
     }
 
-    return ticksFromTimestamps(me, ticks, me._majorUnit);
+    return ticksFromTimestamps(this, ticks, this._majorUnit);
+  }
+
+  afterAutoSkip() {
+    // Offsets for bar charts need to be handled with the auto skipped
+    // ticks. Once ticks have been skipped, we re-compute the offsets.
+    if (this.options.offsetAfterAutoskip) {
+      this.initOffsets(this.ticks.map(tick => +tick.value));
+    }
   }
 
   /**
@@ -353,34 +412,32 @@ export default class TimeScale extends Scale {
 	 * They add extra margins on the both sides by scaling down the original scale.
 	 * Offsets are added when the `offset` option is true.
 	 * @param {number[]} timestamps
-	 * @return {object}
 	 * @protected
 	 */
-  initOffsets(timestamps) {
-    const me = this;
+  initOffsets(timestamps = []) {
     let start = 0;
     let end = 0;
     let first, last;
 
-    if (me.options.offset && timestamps.length) {
-      first = me.getDecimalForValue(timestamps[0]);
+    if (this.options.offset && timestamps.length) {
+      first = this.getDecimalForValue(timestamps[0]);
       if (timestamps.length === 1) {
         start = 1 - first;
       } else {
-        start = (me.getDecimalForValue(timestamps[1]) - first) / 2;
+        start = (this.getDecimalForValue(timestamps[1]) - first) / 2;
       }
-      last = me.getDecimalForValue(timestamps[timestamps.length - 1]);
+      last = this.getDecimalForValue(timestamps[timestamps.length - 1]);
       if (timestamps.length === 1) {
         end = last;
       } else {
-        end = (last - me.getDecimalForValue(timestamps[timestamps.length - 2])) / 2;
+        end = (last - this.getDecimalForValue(timestamps[timestamps.length - 2])) / 2;
       }
     }
     const limit = timestamps.length < 3 ? 0.5 : 0.25;
     start = _limitValue(start, 0, limit);
     end = _limitValue(end, 0, limit);
 
-    me._offsets = {start, end, factor: 1 / (start + 1 + end)};
+    this._offsets = {start, end, factor: 1 / (start + 1 + end)};
   }
 
   /**
@@ -388,18 +445,17 @@ export default class TimeScale extends Scale {
 	 * `minor` unit using the given scale time `options`.
 	 * Important: this method can return ticks outside the min and max range, it's the
 	 * responsibility of the calling code to clamp values if needed.
-	 * @private
+	 * @protected
 	 */
   _generate() {
-    const me = this;
-    const adapter = me._adapter;
-    const min = me.min;
-    const max = me.max;
-    const options = me.options;
+    const adapter = this._adapter;
+    const min = this.min;
+    const max = this.max;
+    const options = this.options;
     const timeOpts = options.time;
     // @ts-ignore
-    const minor = timeOpts.unit || determineUnitForAutoTicks(timeOpts.minUnit, min, max, me._getLabelCapacity(min));
-    const stepSize = valueOrDefault(timeOpts.stepSize, 1);
+    const minor = timeOpts.unit || determineUnitForAutoTicks(timeOpts.minUnit, min, max, this._getLabelCapacity(min));
+    const stepSize = valueOrDefault(options.ticks.stepSize, 1);
     const weekday = minor === 'week' ? timeOpts.isoWeekday : false;
     const hasWeekday = isNumber(weekday) || weekday === true;
     const ticks = {};
@@ -419,7 +475,7 @@ export default class TimeScale extends Scale {
       throw new Error(min + ' and ' + max + ' are too far apart with stepSize of ' + stepSize + ' ' + minor);
     }
 
-    const timestamps = options.ticks.source === 'data' && me.getDataTimestamps();
+    const timestamps = options.ticks.source === 'data' && this.getDataTimestamps();
     for (time = first, count = 0; time < max; time = +adapter.add(time, stepSize, minor), count++) {
       addTick(ticks, time, timestamps);
     }
@@ -429,7 +485,7 @@ export default class TimeScale extends Scale {
     }
 
     // @ts-ignore
-    return Object.keys(ticks).sort((a, b) => a - b).map(x => +x);
+    return Object.keys(ticks).sort(sorter).map(x => +x);
   }
 
   /**
@@ -437,14 +493,26 @@ export default class TimeScale extends Scale {
 	 * @return {string}
 	 */
   getLabelForValue(value) {
-    const me = this;
-    const adapter = me._adapter;
-    const timeOpts = me.options.time;
+    const adapter = this._adapter;
+    const timeOpts = this.options.time;
 
     if (timeOpts.tooltipFormat) {
       return adapter.format(value, timeOpts.tooltipFormat);
     }
     return adapter.format(value, timeOpts.displayFormats.datetime);
+  }
+
+  /**
+	 * @param {number} value
+	 * @param {string|undefined} format
+	 * @return {string}
+	 */
+  format(value, format) {
+    const options = this.options;
+    const formats = options.time.displayFormats;
+    const unit = this._unit;
+    const fmt = format || formats[unit];
+    return this._adapter.format(value, fmt);
   }
 
   /**
@@ -457,18 +525,22 @@ export default class TimeScale extends Scale {
 	 * @private
 	 */
   _tickFormatFunction(time, index, ticks, format) {
-    const me = this;
-    const options = me.options;
+    const options = this.options;
+    const formatter = options.ticks.callback;
+
+    if (formatter) {
+      return call(formatter, [time, index, ticks], this);
+    }
+
     const formats = options.time.displayFormats;
-    const unit = me._unit;
-    const majorUnit = me._majorUnit;
+    const unit = this._unit;
+    const majorUnit = this._majorUnit;
     const minorFormat = unit && formats[unit];
     const majorFormat = majorUnit && formats[majorUnit];
     const tick = ticks[index];
     const major = majorUnit && majorFormat && tick && tick.major;
-    const label = me._adapter.format(time, format || (major ? majorFormat : minorFormat));
-    const formatter = options.ticks.callback;
-    return formatter ? formatter(label, index, ticks) : label;
+
+    return this._adapter.format(time, format || (major ? majorFormat : minorFormat));
   }
 
   /**
@@ -488,8 +560,7 @@ export default class TimeScale extends Scale {
 	 * @return {number}
 	 */
   getDecimalForValue(value) {
-    const me = this;
-    return value === null ? NaN : (value - me.min) / (me.max - me.min);
+    return value === null ? NaN : (value - this.min) / (this.max - this.min);
   }
 
   /**
@@ -497,10 +568,9 @@ export default class TimeScale extends Scale {
 	 * @return {number}
 	 */
   getPixelForValue(value) {
-    const me = this;
-    const offsets = me._offsets;
-    const pos = me.getDecimalForValue(value);
-    return me.getPixelForDecimal((offsets.start + pos) * offsets.factor);
+    const offsets = this._offsets;
+    const pos = this.getDecimalForValue(value);
+    return this.getPixelForDecimal((offsets.start + pos) * offsets.factor);
   }
 
   /**
@@ -508,10 +578,9 @@ export default class TimeScale extends Scale {
 	 * @return {number}
 	 */
   getValueForPixel(pixel) {
-    const me = this;
-    const offsets = me._offsets;
-    const pos = me.getDecimalForPixel(pixel) / offsets.factor - offsets.end;
-    return me.min + pos * (me.max - me.min);
+    const offsets = this._offsets;
+    const pos = this.getDecimalForPixel(pixel) / offsets.factor - offsets.end;
+    return this.min + pos * (this.max - this.min);
   }
 
   /**
@@ -520,13 +589,12 @@ export default class TimeScale extends Scale {
 	 * @private
 	 */
   _getLabelSize(label) {
-    const me = this;
-    const ticksOpts = me.options.ticks;
-    const tickLabelWidth = me.ctx.measureText(label).width;
-    const angle = toRadians(me.isHorizontal() ? ticksOpts.maxRotation : ticksOpts.minRotation);
+    const ticksOpts = this.options.ticks;
+    const tickLabelWidth = this.ctx.measureText(label).width;
+    const angle = toRadians(this.isHorizontal() ? ticksOpts.maxRotation : ticksOpts.minRotation);
     const cosRotation = Math.cos(angle);
     const sinRotation = Math.sin(angle);
-    const tickFontSize = me._resolveTickFontOptions(0).size;
+    const tickFontSize = this._resolveTickFontOptions(0).size;
 
     return {
       w: (tickLabelWidth * cosRotation) + (tickFontSize * sinRotation),
@@ -540,17 +608,16 @@ export default class TimeScale extends Scale {
 	 * @private
 	 */
   _getLabelCapacity(exampleTime) {
-    const me = this;
-    const timeOpts = me.options.time;
+    const timeOpts = this.options.time;
     const displayFormats = timeOpts.displayFormats;
 
-    // pick the longest format (milliseconds) for guestimation
+    // pick the longest format (milliseconds) for guesstimation
     const format = displayFormats[timeOpts.unit] || displayFormats.millisecond;
-    const exampleLabel = me._tickFormatFunction(exampleTime, 0, ticksFromTimestamps(me, [exampleTime], me._majorUnit), format);
-    const size = me._getLabelSize(exampleLabel);
+    const exampleLabel = this._tickFormatFunction(exampleTime, 0, ticksFromTimestamps(this, [exampleTime], this._majorUnit), format);
+    const size = this._getLabelSize(exampleLabel);
     // subtract 1 - if offset then there's one less label than tick
     // if not offset then one half label padding is added to each end leaving room for one less label
-    const capacity = Math.floor(me.isHorizontal() ? me.width / size.w : me.height / size.h) - 1;
+    const capacity = Math.floor(this.isHorizontal() ? this.width / size.w : this.height / size.h) - 1;
     return capacity > 0 ? capacity : 1;
   }
 
@@ -558,45 +625,43 @@ export default class TimeScale extends Scale {
 	 * @protected
 	 */
   getDataTimestamps() {
-    const me = this;
-    let timestamps = me._cache.data || [];
+    let timestamps = this._cache.data || [];
     let i, ilen;
 
     if (timestamps.length) {
       return timestamps;
     }
 
-    const metas = me.getMatchingVisibleMetas();
+    const metas = this.getMatchingVisibleMetas();
 
-    if (me._normalized && metas.length) {
-      return (me._cache.data = metas[0].controller.getAllParsedValues(me));
+    if (this._normalized && metas.length) {
+      return (this._cache.data = metas[0].controller.getAllParsedValues(this));
     }
 
     for (i = 0, ilen = metas.length; i < ilen; ++i) {
-      timestamps = timestamps.concat(metas[i].controller.getAllParsedValues(me));
+      timestamps = timestamps.concat(metas[i].controller.getAllParsedValues(this));
     }
 
-    return (me._cache.data = me.normalize(timestamps));
+    return (this._cache.data = this.normalize(timestamps));
   }
 
   /**
 	 * @protected
 	 */
   getLabelTimestamps() {
-    const me = this;
-    const timestamps = me._cache.labels || [];
+    const timestamps = this._cache.labels || [];
     let i, ilen;
 
     if (timestamps.length) {
       return timestamps;
     }
 
-    const labels = me.getLabels();
+    const labels = this.getLabels();
     for (i = 0, ilen = labels.length; i < ilen; ++i) {
-      timestamps.push(parse(me, labels[i]));
+      timestamps.push(parse(this, labels[i]));
     }
 
-    return (me._cache.labels = me._normalized ? timestamps : me.normalize(timestamps));
+    return (this._cache.labels = this._normalized ? timestamps : this.normalize(timestamps));
   }
 
   /**
@@ -608,44 +673,3 @@ export default class TimeScale extends Scale {
     return _arrayUnique(values.sort(sorter));
   }
 }
-
-TimeScale.id = 'time';
-
-/**
- * @type {any}
- */
-TimeScale.defaults = {
-  /**
-	 * Scale boundary strategy (bypassed by min/max time options)
-	 * - `data`: make sure data are fully visible, ticks outside are removed
-	 * - `ticks`: make sure ticks are fully visible, data outside are truncated
-	 * @see https://github.com/chartjs/Chart.js/pull/4556
-	 * @since 2.7.0
-	 */
-  bounds: 'data',
-
-  adapters: {},
-  time: {
-    parser: false, // false == a pattern string from or a custom callback that converts its argument to a timestamp
-    unit: false, // false == automatic or override with week, month, year, etc.
-    round: false, // none, or override with week, month, year, etc.
-    isoWeekday: false, // override week start day
-    minUnit: 'millisecond',
-    displayFormats: {}
-  },
-  ticks: {
-    /**
-		 * Ticks generation input values:
-		 * - 'auto': generates "optimal" ticks based on scale size and time options.
-		 * - 'data': generates ticks from data (including labels from data {t|x|y} objects).
-		 * - 'labels': generates ticks from user given `data.labels` values ONLY.
-		 * @see https://github.com/chartjs/Chart.js/pull/4507
-		 * @since 2.7.0
-		 */
-    source: 'auto',
-
-    major: {
-      enabled: false
-    }
-  }
-};

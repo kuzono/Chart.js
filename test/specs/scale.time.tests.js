@@ -73,6 +73,7 @@ describe('Time scale tests', function() {
       },
       ticks: {
         source: 'auto',
+        callback: false,
         major: {
           enabled: false
         }
@@ -286,7 +287,7 @@ describe('Time scale tests', function() {
     it('should have ticks with accurate labels', function() {
       var scale = this.scale;
       var ticks = scale.getTicks();
-      // pixelsPerTick is an aproximation which assumes same number of milliseconds per year (not true)
+      // pixelsPerTick is an approximation which assumes same number of milliseconds per year (not true)
       // we use a threshold of 1 day so that we still match these values
       var pixelsPerTick = scale.width / (ticks.length - 1);
 
@@ -353,8 +354,8 @@ describe('Time scale tests', function() {
                 }
               },
               ticks: {
-                callback: function(value) {
-                  return '<' + value + '>';
+                callback: function(_, i) {
+                  return '<' + i + '>';
                 }
               }
             }
@@ -368,21 +369,21 @@ describe('Time scale tests', function() {
       var labels = getLabels(this.scale);
 
       expect(labels.length).toEqual(21);
-      expect(labels[0]).toEqual('<8:00:00>');
-      expect(labels[labels.length - 1]).toEqual('<8:01:00>');
+      expect(labels[0]).toEqual('<0>');
+      expect(labels[labels.length - 1]).toEqual('<60>');
     });
 
     it('should update ticks.callback correctly', function() {
       var chart = this.chart;
-      chart.options.scales.x.ticks.callback = function(value) {
-        return '{' + value + '}';
+      chart.options.scales.x.ticks.callback = function(_, i) {
+        return '{' + i + '}';
       };
       chart.update();
 
       var labels = getLabels(this.scale);
       expect(labels.length).toEqual(21);
-      expect(labels[0]).toEqual('{8:00:00}');
-      expect(labels[labels.length - 1]).toEqual('{8:01:00}');
+      expect(labels[0]).toEqual('{0}');
+      expect(labels[labels.length - 1]).toEqual('{60}');
     });
   });
 
@@ -410,6 +411,49 @@ describe('Time scale tests', function() {
     var value = controller.getParsed(0)[xScale.id];
     expect(xScale.getLabelForValue(value)).toBeTruthy();
     expect(xScale.getLabelForValue(value)).toBe('Jan 1, 2015, 8:00:00 pm');
+  });
+
+  it('should get the correct label for a data value by format', function() {
+    var chart = window.acquireChart({
+      type: 'line',
+      data: {
+        datasets: [{
+          xAxisID: 'x',
+          data: [null, 10, 3]
+        }],
+        labels: ['2015-01-01T20:00:00', '2015-01-02T21:00:00', '2015-01-03T22:00:00', '2015-01-05T23:00:00', '2015-01-07T03:00', '2015-01-08T10:00', '2015-01-10T12:00'], // days
+      },
+      options: {
+        scales: {
+          x: {
+            type: 'time',
+            time: {
+              unit: 'day',
+              displayFormats: {
+                day: 'YYYY-MM-DD'
+              }
+            },
+            position: 'bottom',
+            ticks: {
+              source: 'labels',
+              autoSkip: false
+            }
+          }
+        }
+      }
+    });
+
+    var xScale = chart.scales.x;
+    for (const lbl of chart.data.labels) {
+      var dd = xScale._adapter.parse(lbl);
+      var parsed = lbl.split('T');
+      expect(xScale.format(dd)).toBe(parsed[0]);
+    }
+    for (const lbl of chart.data.labels) {
+      var mm = xScale._adapter.parse(lbl);
+      var yearMonth = lbl.substring(0, 7);
+      expect(xScale.format(mm, 'YYYY-MM')).toBe(yearMonth);
+    }
   });
 
   it('should round to isoWeekday', function() {
@@ -450,8 +494,11 @@ describe('Time scale tests', function() {
         datasets: [{
           xAxisID: 'x',
           data: [
-            {t: +new Date('2018-01-08 05:14:23.234'), y: 10},
-            {t: +new Date('2018-01-09 06:17:43.426'), y: 3}
+            // Normally (at least with the moment.js adapter), times would be in
+            // the user's local time zone.  To allow for more stable tests, our
+            // tests/index.js sets moment.js to use UTC; use `Z` here to match.
+            {t: +new Date('2018-01-08 05:14:23.234Z'), y: 10},
+            {t: +new Date('2018-01-09 06:17:43.426Z'), y: 3}
           ]
         }],
       },
@@ -764,7 +811,7 @@ describe('Time scale tests', function() {
           var start = scale.left;
           var slice = scale.width / 5;
 
-          expect(scale.getPixelForValue(moment('2017').valueOf(), 1)).toBeCloseToPixel(start + slice);
+          expect(scale.getPixelForValue(moment('2017').valueOf(), 1)).toBeCloseToPixel(86);
           expect(scale.getPixelForValue(moment('2042').valueOf(), 5)).toBeCloseToPixel(start + slice * 5);
         });
         it ('should add a step after if scale.max is after the last data', function() {
@@ -776,10 +823,9 @@ describe('Time scale tests', function() {
           chart.update();
 
           var start = scale.left;
-          var slice = scale.width / 5;
 
           expect(scale.getPixelForValue(moment('2017').valueOf(), 0)).toBeCloseToPixel(start);
-          expect(scale.getPixelForValue(moment('2042').valueOf(), 4)).toBeCloseToPixel(start + slice * 4);
+          expect(scale.getPixelForValue(moment('2042').valueOf(), 4)).toBeCloseToPixel(388);
         });
         it ('should add steps before and after if scale.min/max are outside the data range', function() {
           var chart = this.chart;
@@ -790,11 +836,8 @@ describe('Time scale tests', function() {
           options.max = '2050';
           chart.update();
 
-          var start = scale.left;
-          var slice = scale.width / 6;
-
-          expect(scale.getPixelForValue(moment('2017').valueOf(), 1)).toBeCloseToPixel(start + slice);
-          expect(scale.getPixelForValue(moment('2042').valueOf(), 5)).toBeCloseToPixel(start + slice * 5);
+          expect(scale.getPixelForValue(moment('2017').valueOf(), 1)).toBeCloseToPixel(71);
+          expect(scale.getPixelForValue(moment('2042').valueOf(), 5)).toBeCloseToPixel(401);
         });
       });
       describe('is "time"', function() {
@@ -1102,8 +1145,8 @@ describe('Time scale tests', function() {
           },
           y: {
             type: 'linear',
-            grid: {
-              drawBorder: false
+            border: {
+              display: false
             }
           }
         }
@@ -1179,7 +1222,7 @@ describe('Time scale tests', function() {
           }
         });
 
-        // NOTE: built-in adapter uses moment
+        // NOTE: the test suite is configured to use moment
         var expected = {
           datetime: 'MMM D, YYYY, h:mm:ss a',
           millisecond: 'h:mm:ss.SSS a',
@@ -1217,7 +1260,7 @@ describe('Time scale tests', function() {
           }
         });
 
-        // NOTE: built-in adapter uses moment
+        // NOTE: the test suite is configured to use moment
         var expected = {
           datetime: 'MMM D, YYYY, h:mm:ss a',
           millisecond: 'foo',
@@ -1235,5 +1278,59 @@ describe('Time scale tests', function() {
         expect(chart.options.scales.x.time.displayFormats).toEqual(expected);
       });
     });
+  });
+
+  it('should pass chart options to date adapter', function() {
+    let chartOptions;
+
+    Chart._adapters._date.override({
+      init(options) {
+        chartOptions = options;
+      }
+    });
+
+    var chart = window.acquireChart({
+      type: 'line',
+      data: {},
+      options: {
+        locale: 'es',
+        scales: {
+          x: {
+            type: 'time'
+          },
+        }
+      }
+    });
+
+    expect(chartOptions).toEqual(chart.options);
+  });
+
+  it('should pass timestamp to ticks callback', () => {
+    let callbackValue;
+    window.acquireChart({
+      type: 'line',
+      data: {
+        datasets: [{
+          xAxisID: 'x',
+          data: [0, 0]
+        }],
+        labels: ['2015-01-01T20:00:00', '2015-01-01T20:01:00']
+      },
+      options: {
+        scales: {
+          x: {
+            type: 'time',
+            ticks: {
+              callback(value) {
+                callbackValue = value;
+                return value;
+              }
+            }
+          }
+        }
+      }
+    });
+
+    expect(typeof callbackValue).toBe('number');
   });
 });

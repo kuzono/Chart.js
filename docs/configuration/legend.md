@@ -6,6 +6,10 @@ The chart legend displays data about the datasets that are appearing on the char
 
 Namespace: `options.plugins.legend`, the global options for the chart legend is defined in `Chart.defaults.plugins.legend`.
 
+:::warning
+The doughnut, pie, and polar area charts override the legend defaults. To change the overrides for those chart types, the options are defined in `Chart.overrides[type].plugins.legend`.
+:::
+
 | Name | Type | Default | Description
 | ---- | ---- | ------- | -----------
 | `display` | `boolean` | `true` | Is the legend shown?
@@ -22,6 +26,10 @@ Namespace: `options.plugins.legend`, the global options for the chart legend is 
 | `rtl` | `boolean` | | `true` for rendering the legends from right to left.
 | `textDirection` | `string` | canvas' default | This will force the text direction `'rtl'` or `'ltr'` on the canvas for rendering the legend, regardless of the css specified on the canvas
 | `title` | `object` | | See the [Legend Title Configuration](#legend-title-configuration) section below.
+
+:::tip Note
+If you need more visual customizations, please use an [HTML legend](../samples/legend/html.md).
+:::
 
 ## Position
 
@@ -58,10 +66,13 @@ Namespace: `options.plugins.legend.labels`
 | `padding` | `number` | `10` | Padding between rows of colored boxes.
 | `generateLabels` | `function` | | Generates legend items for each thing in the legend. Default implementation returns the text + styling for the color box. See [Legend Item](#legend-item-interface) for details.
 | `filter` | `function` | `null` | Filters legend items out of the legend. Receives 2 parameters, a [Legend Item](#legend-item-interface) and the chart data.
-| `sort` | `function` | `null` | Sorts legend items. Receives 3 parameters, two [Legend Items](#legend-item-interface) and the chart data.
-| `pointStyle` | | | If specified, this style of point is used for the legend. Only used if `usePointStyle` is true.
+| `sort` | `function` | `null` | Sorts legend items. Type is : `sort(a: LegendItem, b: LegendItem, data: ChartData): number;`. Receives 3 parameters, two [Legend Items](#legend-item-interface) and the chart data. The return value of the function is a number that indicates the order of the two legend item parameters. The ordering matches the [return value](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/sort#description) of `Array.prototype.sort()`
+| [`pointStyle`](elements.md#point-styles) | [`pointStyle`](elements.md#types) | `'circle'` | If specified, this style of point is used for the legend. Only used if `usePointStyle` is true.
 | `textAlign` | `string` | `'center'` | Horizontal alignment of the label text. Options are: `'left'`, `'right'` or `'center'`.
-| `usePointStyle` | `boolean` | `false` | Label style will match corresponding point style (size is based on the minimum value between boxWidth and font.size).
+| `usePointStyle` | `boolean` | `false` | Label style will match corresponding point style (size is based on pointStyleWidth or the minimum value between boxWidth and font.size).
+| `pointStyleWidth` | `number` | `null` | If `usePointStyle` is true, the width of the point style used for the legend.
+| `useBorderRadius` | `boolean` | `false` | Label borderRadius will match corresponding borderRadius.
+| `borderRadius` | `number` | `undefined` | Override the borderRadius to use.
 
 ## Legend Title Configuration
 
@@ -84,11 +95,18 @@ Items passed to the legend `onClick` function are the ones returned from `labels
     // Label that will be displayed
     text: string,
 
+    // Border radius of the legend item.
+    // Introduced in 3.1.0
+    borderRadius?: number | BorderRadius,
+
     // Index of the associated dataset
     datasetIndex: number,
 
     // Fill style of the legend box
     fillStyle: Color,
+
+    // Text color
+    fontColor: Color,
 
     // If true, this item represents a hidden dataset. Label will be rendered with a strike-through effect
     hidden: boolean,
@@ -112,7 +130,7 @@ Items passed to the legend `onClick` function are the ones returned from `labels
     strokeStyle: Color,
 
     // Point style of the legend box (only used if usePointStyle is true)
-    pointStyle: string | Image,
+    pointStyle: string | Image | HTMLCanvasElement,
 
     // Rotation of the point in degrees (only used if usePointStyle is true)
     rotation: number
@@ -121,10 +139,10 @@ Items passed to the legend `onClick` function are the ones returned from `labels
 
 ## Example
 
-The following example will create a chart with the legend enabled and turn all of the text red in color.
+The following example will create a chart with the legend enabled and turn all the text red in color.
 
 ```javascript
-var chart = new Chart(ctx, {
+const chart = new Chart(ctx, {
     type: 'bar',
     data: data,
     options: {
@@ -160,16 +178,23 @@ function(e, legendItem, legend) {
 }
 ```
 
-Lets say we wanted instead to link the display of the first two datasets. We could change the click handler accordingly.
+Let's say we wanted instead to link the display of the first two datasets. We could change the click handler accordingly.
 
 ```javascript
-var defaultLegendClickHandler = Chart.defaults.plugins.legend.onClick;
-var newLegendClickHandler = function (e, legendItem, legend) {
-    var index = legendItem.datasetIndex;
+const defaultLegendClickHandler = Chart.defaults.plugins.legend.onClick;
+const pieDoughnutLegendClickHandler = Chart.controllers.doughnut.overrides.plugins.legend.onClick;
+const newLegendClickHandler = function (e, legendItem, legend) {
+    const index = legendItem.datasetIndex;
+    const type = legend.chart.config.type;
 
     if (index > 1) {
         // Do the original logic
-        defaultLegendClickHandler(e, legendItem);
+        if (type === 'pie' || type === 'doughnut') {
+            pieDoughnutLegendClickHandler(e, legendItem, legend)
+        } else {
+            defaultLegendClickHandler(e, legendItem, legend);
+        }
+
     } else {
         let ci = legend.chart;
         [
@@ -182,7 +207,7 @@ var newLegendClickHandler = function (e, legendItem, legend) {
     }
 };
 
-var chart = new Chart(ctx, {
+const chart = new Chart(ctx, {
     type: 'line',
     data: data,
     options: {

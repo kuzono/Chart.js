@@ -2,13 +2,13 @@
  * Chart.Platform implementation for targeting a web browser
  */
 
-import BasePlatform from './platform.base';
-import {_getParentNode, getRelativePosition, supportsEventListenerOptions, readUsedSize, getMaximumSize} from '../helpers/helpers.dom';
-import {throttled} from '../helpers/helpers.extras';
-import {isNullOrUndef} from '../helpers/helpers.core';
+import BasePlatform from './platform.base.js';
+import {_getParentNode, getRelativePosition, supportsEventListenerOptions, readUsedSize, getMaximumSize} from '../helpers/helpers.dom.js';
+import {throttled} from '../helpers/helpers.extras.js';
+import {isNullOrUndef} from '../helpers/helpers.core.js';
 
 /**
- * @typedef { import("../core/core.controller").default } Chart
+ * @typedef { import('../core/core.controller.js').default } Chart
  */
 
 const EXPANDO_KEY = '$chartjs';
@@ -95,11 +95,15 @@ function initCanvas(canvas, aspectRatio) {
 const eventListenerOptions = supportsEventListenerOptions ? {passive: true} : false;
 
 function addListener(node, type, listener) {
-  node.addEventListener(type, listener, eventListenerOptions);
+  if (node) {
+    node.addEventListener(type, listener, eventListenerOptions);
+  }
 }
 
 function removeListener(chart, type, listener) {
-  chart.canvas.removeEventListener(type, listener, eventListenerOptions);
+  if (chart && chart.canvas) {
+    chart.canvas.removeEventListener(type, listener, eventListenerOptions);
+  }
 }
 
 function fromNativeEvent(event, chart) {
@@ -114,20 +118,25 @@ function fromNativeEvent(event, chart) {
   };
 }
 
+function nodeListContains(nodeList, canvas) {
+  for (const node of nodeList) {
+    if (node === canvas || node.contains(canvas)) {
+      return true;
+    }
+  }
+}
+
 function createAttachObserver(chart, type, listener) {
   const canvas = chart.canvas;
-  const container = canvas && _getParentNode(canvas);
-  const element = container || canvas;
   const observer = new MutationObserver(entries => {
-    const parent = _getParentNode(element);
-    entries.forEach(entry => {
-      for (let i = 0; i < entry.addedNodes.length; i++) {
-        const added = entry.addedNodes[i];
-        if (added === element || added === parent) {
-          listener(entry.target);
-        }
-      }
-    });
+    let trigger = false;
+    for (const entry of entries) {
+      trigger = trigger || nodeListContains(entry.addedNodes, canvas);
+      trigger = trigger && !nodeListContains(entry.removedNodes, canvas);
+    }
+    if (trigger) {
+      listener();
+    }
   });
   observer.observe(document, {childList: true, subtree: true});
   return observer;
@@ -135,21 +144,17 @@ function createAttachObserver(chart, type, listener) {
 
 function createDetachObserver(chart, type, listener) {
   const canvas = chart.canvas;
-  const container = canvas && _getParentNode(canvas);
-  if (!container) {
-    return;
-  }
   const observer = new MutationObserver(entries => {
-    entries.forEach(entry => {
-      for (let i = 0; i < entry.removedNodes.length; i++) {
-        if (entry.removedNodes[i] === canvas) {
-          listener();
-          break;
-        }
-      }
-    });
+    let trigger = false;
+    for (const entry of entries) {
+      trigger = trigger || nodeListContains(entry.removedNodes, canvas);
+      trigger = trigger && !nodeListContains(entry.addedNodes, canvas);
+    }
+    if (trigger) {
+      listener();
+    }
   });
-  observer.observe(container, {childList: true});
+  observer.observe(document, {childList: true, subtree: true});
   return observer;
 }
 
@@ -210,7 +215,7 @@ function createResizeObserver(chart, type, listener) {
     const width = entry.contentRect.width;
     const height = entry.contentRect.height;
     // When its container's display is set to 'none' the callback will be called with a
-    // size of (0, 0), which will cause the chart to lost its original height, so skip
+    // size of (0, 0), which will cause the chart to lose its original height, so skip
     // resizing in such case.
     if (width === 0 && height === 0) {
       return;
@@ -241,10 +246,7 @@ function createProxyAndListen(chart, type, listener) {
     if (chart.ctx !== null) {
       listener(fromNativeEvent(event, chart));
     }
-  }, chart, (args) => {
-    const event = args[0];
-    return [event, event.offsetX, event.offsetY];
-  });
+  }, chart);
 
   addListener(canvas, type, proxy);
 
@@ -381,7 +383,7 @@ export default class DomPlatform extends BasePlatform {
 	 * @param {HTMLCanvasElement} canvas
 	 */
   isAttached(canvas) {
-    const container = _getParentNode(canvas);
-    return !!(container && _getParentNode(container));
+    const container = canvas && _getParentNode(canvas);
+    return !!(container && container.isConnected);
   }
 }

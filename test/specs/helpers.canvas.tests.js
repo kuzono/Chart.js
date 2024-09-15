@@ -21,9 +21,27 @@ describe('Chart.helpers.canvas', function() {
       expect(chart.ctx.clearRect.calls.first().object).toBe(chart.ctx);
       expect(chart.ctx.clearRect.calls.first().args).toEqual([0, 0, 150, 245]);
     });
+
+    it('should not throw error when chart is null', function() {
+      function createAndClearChart() {
+        var chart = acquireChart({}, {
+          canvas: null
+        });
+        // explicitly set canvas and ctx to null since setting it in acquireChart doesn't do anything
+        chart.canvas = null;
+        chart.ctx = null;
+
+        helpers.clearCanvas(chart.canvas, chart.ctx);
+      }
+
+      expect(createAndClearChart).not.toThrow();
+    });
   });
 
   describe('isPointInArea', function() {
+    it('should return true when no area is provided', function() {
+      expect(helpers._isPointInArea({x: 1, y: 1})).toBe(true);
+    });
     it('should determine if a point is in the area', function() {
       var isPointInArea = helpers._isPointInArea;
       var area = {left: 0, top: 0, right: 512, bottom: 256};
@@ -317,14 +335,14 @@ describe('Chart.helpers.canvas', function() {
         name: 'save',
         args: [],
       }, {
+        name: 'setFont',
+        args: ['12px arial'],
+      }, {
         name: 'translate',
         args: [10, 20],
       }, {
         name: 'rotate',
         args: [90],
-      }, {
-        name: 'setFont',
-        args: ['12px arial'],
       }, {
         name: 'fillText',
         args: ['foo', 0, 0, undefined],

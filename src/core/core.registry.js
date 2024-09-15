@@ -1,8 +1,8 @@
-import DatasetController from './core.datasetController';
-import Element from './core.element';
-import Scale from './core.scale';
-import TypedRegistry from './core.typedRegistry';
-import {each, callback as call, _capitalize} from '../helpers/helpers.core';
+import DatasetController from './core.datasetController.js';
+import Element from './core.element.js';
+import Scale from './core.scale.js';
+import TypedRegistry from './core.typedRegistry.js';
+import {each, callback as call, _capitalize} from '../helpers/helpers.core.js';
 
 /**
  * Please use the module's default export which provides a singleton instance
@@ -122,25 +122,24 @@ export class Registry {
 	 * @private
 	 */
   _each(method, args, typedRegistry) {
-    const me = this;
     [...args].forEach(arg => {
-      const reg = typedRegistry || me._getRegistryForType(arg);
-      if (typedRegistry || reg.isForType(arg) || (reg === me.plugins && arg.id)) {
-        me._exec(method, reg, arg);
+      const reg = typedRegistry || this._getRegistryForType(arg);
+      if (typedRegistry || reg.isForType(arg) || (reg === this.plugins && arg.id)) {
+        this._exec(method, reg, arg);
       } else {
         // Handle loopable args
         // Use case:
-        //  import * as plugins from './plugins';
+        //  import * as plugins from './plugins.js';
         //  Chart.register(plugins);
         each(arg, item => {
           // If there are mixed types in the loopable, make sure those are
           // registered in correct registry
           // Use case: (treemap exporting controller, elements etc)
-          //  import * as treemap from 'chartjs-chart-treemap';
+          //  import * as treemap from 'chartjs-chart-treemap.js';
           //  Chart.register(treemap);
 
-          const itemReg = typedRegistry || me._getRegistryForType(item);
-          me._exec(method, itemReg, item);
+          const itemReg = typedRegistry || this._getRegistryForType(item);
+          this._exec(method, itemReg, item);
         });
       }
     });
@@ -184,4 +183,4 @@ export class Registry {
 }
 
 // singleton instance
-export default new Registry();
+export default /* #__PURE__ */ new Registry();

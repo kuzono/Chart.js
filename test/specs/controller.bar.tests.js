@@ -30,6 +30,26 @@ describe('Chart.controllers.bar', function() {
     expect(meta.controller.index).toBe(0);
   });
 
+  it('should set null bars to the reset state', function() {
+    var chart = window.acquireChart({
+      type: 'bar',
+      data: {
+        datasets: [{
+          data: [10, null, 0, -4],
+          label: 'dataset1',
+        }],
+        labels: ['label1', 'label2', 'label3', 'label4']
+      }
+    });
+
+    var meta = chart.getDatasetMeta(0);
+    var bar = meta.data[1];
+    var {x, y, base} = bar.getProps(['x', 'y', 'base'], true);
+    expect(isNaN(x)).toBe(false);
+    expect(isNaN(y)).toBe(false);
+    expect(isNaN(base)).toBe(false);
+  });
+
   it('should use the first scale IDs if the dataset does not specify them', function() {
     var chart = window.acquireChart({
       type: 'bar',
@@ -1607,5 +1627,184 @@ describe('Chart.controllers.bar', function() {
 
       expect(chart.scales.y.getMinMax()).toEqual({min: -10, max: 10});
     });
+  });
+
+  describe('clip', function() {
+    it('Should not use ctx.clip when clip=false', function() {
+      var ctx = window.createMockContext();
+      ctx.resetTransform = function() {};
+
+      var chart = window.acquireChart({
+        type: 'bar',
+        data: {
+          labels: ['a', 'b', 'c'],
+          datasets: [{
+            data: [1, 2, 3],
+            clip: false
+          }]
+        }
+      });
+      var orig = chart.ctx;
+
+      // Draw on mock context
+      chart.ctx = ctx;
+      chart.draw();
+
+      chart.ctx = orig;
+
+      expect(ctx.getCalls().filter(x => x.name === 'clip').length).toEqual(0);
+    });
+  });
+
+  it('should not crash with skipNull and uneven datasets', function() {
+    function unevenChart() {
+      window.acquireChart({
+        type: 'bar',
+        data: {
+          labels: [1, 2],
+          datasets: [
+            {data: [1, 2]},
+            {data: [1, 2, 3]},
+          ]
+        },
+        options: {
+          skipNull: true,
+        }
+      });
+    }
+
+    expect(unevenChart).not.toThrow();
+  });
+
+  it('should correctly count the number of stacks when skipNull and different order datasets', function() {
+
+    const chart = window.acquireChart({
+      type: 'bar',
+      data: {
+        datasets: [
+          {
+            id: '1',
+            label: 'USA',
+            data: [
+              {
+                xScale: 'First',
+                Country: 'USA',
+                yScale: 524
+              },
+              {
+                xScale: 'Second',
+                Country: 'USA',
+                yScale: 325
+              }
+            ],
+
+            yAxisID: 'yScale',
+            xAxisID: 'xScale',
+
+            parsing: {
+              yAxisKey: 'yScale',
+              xAxisKey: 'xScale'
+            }
+          },
+          {
+            id: '2',
+            label: 'BRA',
+            data: [
+              {
+                xScale: 'Second',
+                Country: 'BRA',
+                yScale: 183
+              },
+              {
+                xScale: 'First',
+                Country: 'BRA',
+                yScale: 177
+              }
+            ],
+
+            yAxisID: 'yScale',
+            xAxisID: 'xScale',
+
+            parsing: {
+              yAxisKey: 'yScale',
+              xAxisKey: 'xScale'
+            }
+          },
+          {
+            id: '3',
+            label: 'DEU',
+            data: [
+              {
+                xScale: 'First',
+                Country: 'DEU',
+                yScale: 162
+              }
+            ],
+
+            yAxisID: 'yScale',
+            xAxisID: 'xScale',
+
+            parsing: {
+              yAxisKey: 'yScale',
+              xAxisKey: 'xScale'
+            }
+          }
+        ]
+      },
+      options: {
+        skipNull: true
+      }
+    });
+
+    var meta = chart.getDatasetMeta(0);
+    expect(meta.controller._getStackCount(0)).toBe(3);
+    expect(meta.controller._getStackCount(1)).toBe(2);
+
+  });
+
+  it('should not override tooltip title and label callbacks', async() => {
+    const chart = window.acquireChart({
+      type: 'bar',
+      data: {
+        labels: ['Label 1', 'Label 2'],
+        datasets: [{
+          data: [21, 79],
+          label: 'Dataset 1'
+        }, {
+          data: [33, 67],
+          label: 'Dataset 2'
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: true,
+      }
+    });
+    const {tooltip} = chart;
+    const point = chart.getDatasetMeta(0).data[0];
+
+    await jasmine.triggerMouseEvent(chart, 'mousemove', point);
+
+    expect(tooltip.title).toEqual(['Label 1']);
+    expect(tooltip.body).toEqual([{
+      before: [],
+      lines: ['Dataset 1: 21'],
+      after: []
+    }]);
+
+    chart.options.plugins.tooltip = {mode: 'dataset'};
+    chart.update();
+    await jasmine.triggerMouseEvent(chart, 'mousemove', point);
+
+    expect(tooltip.title).toEqual(['Dataset 1']);
+    expect(tooltip.body).toEqual([{
+      before: [],
+      lines: ['Label 1: 21'],
+      after: []
+    }, {
+      before: [],
+      lines: ['Label 2: 79'],
+      after: []
+    }]);
   });
 });

@@ -271,7 +271,7 @@ describe('Platform.dom', function() {
   });
 
   describe('config.options.responsive: true (maintainAspectRatio: true)', function() {
-    it('should fill parent width and use aspect ratio to calculate height', function() {
+    it('should fit parent using aspect ratio to calculate size', function() {
       var chart = acquireChart({
         options: {
           responsive: true,
@@ -286,9 +286,11 @@ describe('Platform.dom', function() {
         }
       });
 
-      expect(chart).toBeChartOfSize({
-        dw: 300, dh: 490,
-        rw: 300, rh: 490,
+      waitForResize(chart, () => {
+        expect(chart).toBeChartOfSize({
+          dw: 214, dh: 350,
+          rw: 214, rh: 350,
+        });
       });
     });
   });
@@ -408,17 +410,22 @@ describe('Platform.dom', function() {
       var platform = new DomPlatform();
       var canvas = document.createElement('canvas');
       var div = document.createElement('div');
+      var anotherDiv = document.createElement('div');
 
       expect(platform.isAttached(canvas)).toEqual(false);
       div.appendChild(canvas);
       expect(platform.isAttached(canvas)).toEqual(false);
-      document.body.appendChild(div);
+      anotherDiv.appendChild(div);
+      expect(platform.isAttached(canvas)).toEqual(false);
+      document.body.appendChild(anotherDiv);
 
       expect(platform.isAttached(canvas)).toEqual(true);
 
+      anotherDiv.removeChild(div);
+      expect(platform.isAttached(canvas)).toEqual(false);
       div.removeChild(canvas);
       expect(platform.isAttached(canvas)).toEqual(false);
-      document.body.removeChild(div);
+      document.body.removeChild(anotherDiv);
       expect(platform.isAttached(canvas)).toEqual(false);
     });
   });

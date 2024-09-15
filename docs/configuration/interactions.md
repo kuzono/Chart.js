@@ -1,12 +1,13 @@
 # Interactions
 
-Namespace: `options.interaction`, the global interaction configuration is at `Chart.defaults.interaction`. To configure which events trigger chart interactions, see [events](events.md#events).
+Namespace: `options.interaction`, the global interaction configuration is at `Chart.defaults.interaction`. To configure which events trigger chart interactions, see [events](#events).
 
 | Name | Type | Default | Description
 | ---- | ---- | ------- | -----------
-| `mode` | `string` | `'nearest'` | Sets which elements appear in the interaction. See [Interaction Modes](modes.md#interaction-modes) for details.
+| `mode` | `string` | `'nearest'` | Sets which elements appear in the interaction. See [Interaction Modes](#modes) for details.
 | `intersect` | `boolean` | `true` | if true, the interaction mode only applies when the mouse position intersects an item on the chart.
-| `axis` | `string` | `'x'` | Can be set to `'x'`, `'y'`, or `'xy'` to define which directions are used in calculating distances. Defaults to `'x'` for `'index'` mode and `'xy'` in `dataset` and `'nearest'` modes.
+| `axis` | `string` | `'x'` | Can be set to `'x'`, `'y'`, `'xy'` or `'r'` to define which directions are used in calculating distances. Defaults to `'x'` for `'index'` mode and `'xy'` in `dataset` and `'nearest'` modes.
+| `includeInvisible` | `boolean` | `false` | if true, the invisible points that are outside of the chart area will also be included when evaluating interactions.
 
 By default, these options apply to both the hover and tooltip interactions. The same options can be set in the `options.hover` namespace, in which case they will only affect the hover interaction. Similarly, the options can be set in the `options.plugins.tooltip` namespace to independently configure the tooltip interactions.
 
@@ -17,24 +18,68 @@ Namespace: `options`
 
 | Name | Type | Default | Description
 | ---- | ---- | ------- | -----------
-| `events` | `string[]` | `['mousemove', 'mouseout', 'click', 'touchstart', 'touchmove']` | The `events` option defines the browser events that the chart should listen to for tooltips and hovering. [more...](#event-option)
-| `onHover` | `function` | `null` | Called when any of the events fire. Passed the event, an array of active elements (bars, points, etc), and the chart.
-| `onClick` | `function` | `null` | Called if the event is of type `'mouseup'` or `'click'`. Passed the event, an array of active elements, and the chart.
+| `events` | `string[]` | `['mousemove', 'mouseout', 'click', 'touchstart', 'touchmove']` | The `events` option defines the browser events that the chart should listen to for. Each of these events trigger hover and are passed to plugins. [more...](#event-option)
+| `onHover` | `function` | `null` | Called when any of the events fire over chartArea. Passed the event, an array of active elements (bars, points, etc), and the chart.
+| `onClick` | `function` | `null` | Called if the event is of type `'mouseup'`, `'click'` or '`'contextmenu'` over chartArea. Passed the event, an array of active elements, and the chart.
 
 ### Event Option
 
 For example, to have the chart only respond to click events, you could do:
 
 ```javascript
-var chart = new Chart(ctx, {
-    type: 'line',
-    data: data,
-    options: {
-        // This chart will not respond to mousemove, etc
-        events: ['click']
-    }
+const chart = new Chart(ctx, {
+  type: 'line',
+  data: data,
+  options: {
+    // This chart will not respond to mousemove, etc
+    events: ['click']
+  }
 });
 ```
+
+Events for each plugin can be further limited by defining (allowed) events array in plugin options:
+
+```javascript
+const chart = new Chart(ctx, {
+  type: 'line',
+  data: data,
+  options: {
+    // All of these (default) events trigger a hover and are passed to all plugins,
+    // unless limited at plugin options
+    events: ['mousemove', 'mouseout', 'click', 'touchstart', 'touchmove'],
+    plugins: {
+      tooltip: {
+        // Tooltip will only receive click events
+        events: ['click']
+      }
+    }
+  }
+});
+```
+
+Events that do not fire over chartArea, like `mouseout`, can be captured using a simple plugin:
+
+```javascript
+const chart = new Chart(ctx, {
+  type: 'line',
+  data: data,
+  options: {
+    // these are the default events:
+    // events: ['mousemove', 'mouseout', 'click', 'touchstart', 'touchmove'],
+  },
+  plugins: [{
+    id: 'myEventCatcher',
+    beforeEvent(chart, args, pluginOptions) {
+      const event = args.event;
+      if (event.type === 'mouseout') {
+        // process the event
+      }
+    }
+  }]
+});
+```
+
+For more information about plugins, see [Plugins](../developers/plugins.md)
 
 ### Converting Events to Data Values
 
@@ -56,6 +101,8 @@ const chart = new Chart(ctx, {
 });
 ```
 
+When using a bundler, the helper functions have to be imported separately, for a full explanation of this please head over to the [integration](../getting-started/integration.md#helper-functions) page
+
 ## Modes
 
 When configuring the interaction with the graph via `interaction`, `hover` or `tooltips`, a number of different modes are available.
@@ -64,12 +111,14 @@ When configuring the interaction with the graph via `interaction`, `hover` or `t
 
 The modes are detailed below and how they behave in conjunction with the `intersect` setting.
 
+See how different modes work with the tooltip in [tooltip interactions sample](../samples/tooltip/interactions.md )
+
 ### point
 
 Finds all of the items that intersect the point.
 
 ```javascript
-var chart = new Chart(ctx, {
+const chart = new Chart(ctx, {
     type: 'line',
     data: data,
     options: {
@@ -82,10 +131,10 @@ var chart = new Chart(ctx, {
 
 ### nearest
 
-Gets the items that are at the nearest distance to the point. The nearest item is determined based on the distance to the center of the chart item (point, bar). You can use the `axis` setting to define which directions are used in distance calculation. If `intersect` is true, this is only triggered when the mouse position intersects an item in the graph. This is very useful for combo charts where points are hidden behind bars.
+Gets the items that are at the nearest distance to the point. The nearest item is determined based on the distance to the center of the chart item (point, bar). You can use the `axis` setting to define which coordinates are considered in distance calculation. If `intersect` is true, this is only triggered when the mouse position intersects an item in the graph. This is very useful for combo charts where points are hidden behind bars.
 
 ```javascript
-var chart = new Chart(ctx, {
+const chart = new Chart(ctx, {
     type: 'line',
     data: data,
     options: {
@@ -101,7 +150,7 @@ var chart = new Chart(ctx, {
 Finds item at the same index. If the `intersect` setting is true, the first intersecting item is used to determine the index in the data. If `intersect` false the nearest item, in the x direction, is used to determine the index.
 
 ```javascript
-var chart = new Chart(ctx, {
+const chart = new Chart(ctx, {
     type: 'line',
     data: data,
     options: {
@@ -115,7 +164,7 @@ var chart = new Chart(ctx, {
 To use index mode in a chart like the horizontal bar chart, where we search along the y direction, you can use the `axis` setting introduced in v2.7.0. By setting this value to `'y'` on the y direction is used.
 
 ```javascript
-var chart = new Chart(ctx, {
+const chart = new Chart(ctx, {
     type: 'bar',
     data: data,
     options: {
@@ -132,7 +181,7 @@ var chart = new Chart(ctx, {
 Finds items in the same dataset. If the `intersect` setting is true, the first intersecting item is used to determine the index in the data. If `intersect` false the nearest item is used to determine the index.
 
 ```javascript
-var chart = new Chart(ctx, {
+const chart = new Chart(ctx, {
     type: 'line',
     data: data,
     options: {
@@ -148,7 +197,7 @@ var chart = new Chart(ctx, {
 Returns all items that would intersect based on the `X` coordinate of the position only. Would be useful for a vertical cursor implementation. Note that this only applies to cartesian charts.
 
 ```javascript
-var chart = new Chart(ctx, {
+const chart = new Chart(ctx, {
     type: 'line',
     data: data,
     options: {
@@ -164,7 +213,7 @@ var chart = new Chart(ctx, {
 Returns all items that would intersect based on the `Y` coordinate of the position. This would be useful for a horizontal cursor implementation. Note that this only applies to cartesian charts.
 
 ```javascript
-var chart = new Chart(ctx, {
+const chart = new Chart(ctx, {
     type: 'line',
     data: data,
     options: {
@@ -173,4 +222,57 @@ var chart = new Chart(ctx, {
         }
     }
 });
+```
+
+## Custom Interaction Modes
+
+New modes can be defined by adding functions to the `Chart.Interaction.modes` map.  You can use the `Chart.Interaction.evaluateInteractionItems` function to help implement these.
+
+Example:
+
+```javascript
+import { Interaction } from 'chart.js';
+import { getRelativePosition } from 'chart.js/helpers';
+
+/**
+ * Custom interaction mode
+ * @function Interaction.modes.myCustomMode
+ * @param {Chart} chart - the chart we are returning items from
+ * @param {Event} e - the event we are find things at
+ * @param {InteractionOptions} options - options to use
+ * @param {boolean} [useFinalPosition] - use final element position (animation target)
+ * @return {InteractionItem[]} - items that are found
+ */
+Interaction.modes.myCustomMode = function(chart, e, options, useFinalPosition) {
+  const position = getRelativePosition(e, chart);
+
+  const items = [];
+  Interaction.evaluateInteractionItems(chart, 'x', position, (element, datasetIndex, index) => {
+    if (element.inXRange(position.x, useFinalPosition) && myCustomLogic(element)) {
+      items.push({element, datasetIndex, index});
+    }
+  });
+  return items;
+};
+
+// Then, to use it...
+new Chart.js(ctx, {
+    type: 'line',
+    data: data,
+    options: {
+        interaction: {
+            mode: 'myCustomMode'
+        }
+    }
+})
+```
+
+If you're using TypeScript, you'll also need to register the new mode:
+
+```typescript
+declare module 'chart.js' {
+  interface InteractionModeMap {
+    myCustomMode: InteractionModeFunction;
+  }
+}
 ```

@@ -1,5 +1,11 @@
 # Animation Progress Bar
 
+## Initial animation
+
+<progress id="initialProgress" max="1" value="0" style="width: 100%"></progress>
+
+## Other animations
+
 <progress id="animationProgress" max="1" value="0" style="width: 100%"></progress>
 
 ```js chart-editor
@@ -36,7 +42,7 @@ const actions = [
       if (data.datasets.length > 0) {
         data.labels = Utils.months({count: data.labels.length + 1});
 
-        for (var index = 0; index < data.datasets.length; ++index) {
+        for (let index = 0; index < data.datasets.length; ++index) {
           data.datasets[index].data.push(Utils.rand(-100, 100));
         }
 
@@ -67,6 +73,7 @@ const actions = [
 // </block:actions>
 
 // <block:setup:1>
+const initProgress = document.getElementById('initialProgress');
 const progress = document.getElementById('animationProgress');
 
 const DATA_COUNT = 7;
@@ -99,11 +106,19 @@ const config = {
   options: {
     animation: {
       duration: 2000,
-      onProgress: function(animation) {
-        progress.value = animation.currentStep / animation.numSteps;
+      onProgress: function(context) {
+        if (context.initial) {
+          initProgress.value = context.currentStep / context.numSteps;
+        } else {
+          progress.value = context.currentStep / context.numSteps;
+        }
       },
-      onComplete: function() {
-        //
+      onComplete: function(context) {
+        if (context.initial) {
+          console.log('Initial animation finished');
+        } else {
+          console.log('animation finished');
+        }
       }
     },
     interaction: {
@@ -124,5 +139,14 @@ const config = {
 module.exports = {
   actions: actions,
   config: config,
+  output: 'console.log output is displayed here'
 };
 ```
+
+## Docs
+* [Animations](../../configuration/animations.md)
+  * [Animation Callbacks](../../configuration/animations.md#animation-callbacks)
+* [Data structures (`labels`)](../../general/data-structures.md)
+* [Line](../../charts/line.md)
+* [Options](../../general/options.md)
+  * [Scriptable Options](../../general/options.md#scriptable-options)

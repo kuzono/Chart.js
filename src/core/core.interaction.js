@@ -1,55 +1,20 @@
-import {_isPointInArea} from '../helpers/helpers.canvas';
-import {_lookupByKey, _rlookupByKey} from '../helpers/helpers.collection';
-import {getRelativePosition as helpersGetRelativePosition} from '../helpers/helpers.dom';
+import {_lookupByKey, _rlookupByKey} from '../helpers/helpers.collection.js';
+import {getRelativePosition} from '../helpers/helpers.dom.js';
+import {_angleBetween, getAngleFromPoint} from '../helpers/helpers.math.js';
+import {_isPointInArea} from '../helpers/index.js';
 
 /**
- * @typedef { import("./core.controller").default } Chart
- * @typedef { import("../platform/platform.base").ChartEvent } ChartEvent
- * @typedef {{axis?: string, intersect?: boolean}} InteractionOptions
- * @typedef {{datasetIndex: number, index: number, element: import("./core.element").default}} InteractionItem
+ * @typedef { import('./core.controller.js').default } Chart
+ * @typedef { import('../types/index.js').ChartEvent } ChartEvent
+ * @typedef {{axis?: string, intersect?: boolean, includeInvisible?: boolean}} InteractionOptions
+ * @typedef {{datasetIndex: number, index: number, element: import('./core.element.js').default}} InteractionItem
+ * @typedef { import('../types/index.js').Point } Point
  */
-
-/**
- * Helper function to get relative position for an event
- * @param {Event|ChartEvent} e - The event to get the position for
- * @param {Chart} chart - The chart
- * @returns {object} the event position
- */
-function getRelativePosition(e, chart) {
-  if ('native' in e) {
-    return {
-      x: e.x,
-      y: e.y
-    };
-  }
-
-  return helpersGetRelativePosition(e, chart);
-}
-
-/**
- * Helper function to traverse all of the visible elements in the chart
- * @param {Chart} chart - the chart
- * @param {function} handler - the callback to execute for each visible item
- */
-function evaluateAllVisibleItems(chart, handler) {
-  const metasets = chart.getSortedVisibleDatasetMetas();
-  let index, data, element;
-
-  for (let i = 0, ilen = metasets.length; i < ilen; ++i) {
-    ({index, data} = metasets[i]);
-    for (let j = 0, jlen = data.length; j < jlen; ++j) {
-      element = data[j];
-      if (!element.skip) {
-        handler(element, index, j);
-      }
-    }
-  }
-}
 
 /**
  * Helper function to do binary search when possible
  * @param {object} metaset - the dataset meta
- * @param {string} axis - the axis mide. x|y|xy
+ * @param {string} axis - the axis mode. x|y|xy|r
  * @param {number} value - the value to find
  * @param {boolean} [intersect] - should the element intersect
  * @returns {{lo:number, hi:number}} indices to search data array between
@@ -57,7 +22,7 @@ function evaluateAllVisibleItems(chart, handler) {
 function binarySearch(metaset, axis, value, intersect) {
   const {controller, data, _sorted} = metaset;
   const iScale = controller._cachedMeta.iScale;
-  if (iScale && axis === iScale.axis && _sorted && data.length) {
+  if (iScale && axis === iScale.axis && axis !== 'r' && _sorted && data.length) {
     const lookupMethod = iScale._reversePixels ? _rlookupByKey : _lookupByKey;
     if (!intersect) {
       return lookupMethod(data, axis, value);
@@ -79,14 +44,14 @@ function binarySearch(metaset, axis, value, intersect) {
 }
 
 /**
- * Helper function to get items using binary search, when the data is sorted.
+ * Helper function to select candidate elements for interaction
  * @param {Chart} chart - the chart
- * @param {string} axis - the axis mode. x|y|xy
- * @param {object} position - the point to be nearest to
+ * @param {string} axis - the axis mode. x|y|xy|r
+ * @param {Point} position - the point to be nearest to, in relative coordinates
  * @param {function} handler - the callback to execute for each visible item
  * @param {boolean} [intersect] - consider intersecting items
  */
-function optimizedEvaluateItems(chart, axis, position, handler, intersect) {
+function evaluateInteractionItems(chart, axis, position, handler, intersect) {
   const metasets = chart.getSortedVisibleDatasetMetas();
   const value = position[axis];
   for (let i = 0, ilen = metasets.length; i < ilen; ++i) {
@@ -104,7 +69,7 @@ function optimizedEvaluateItems(chart, axis, position, handler, intersect) {
 /**
  * Get a distance metric function for two points based on the
  * axis mode setting
- * @param {string} axis - the axis mode. x|y|xy
+ * @param {string} axis - the axis mode. x|y|xy|r
  */
 function getDistanceMetricForAxis(axis) {
   const useX = axis.indexOf('x') !== -1;
@@ -120,52 +85,83 @@ function getDistanceMetricForAxis(axis) {
 /**
  * Helper function to get the items that intersect the event position
  * @param {Chart} chart - the chart
- * @param {object} position - the point to be nearest to
- * @param {string} axis - the axis mode. x|y|xy
+ * @param {Point} position - the point to be nearest to, in relative coordinates
+ * @param {string} axis - the axis mode. x|y|xy|r
  * @param {boolean} [useFinalPosition] - use the element's animation target instead of current position
+ * @param {boolean} [includeInvisible] - include invisible points that are outside of the chart area
  * @return {InteractionItem[]} the nearest items
  */
-function getIntersectItems(chart, position, axis, useFinalPosition) {
+function getIntersectItems(chart, position, axis, useFinalPosition, includeInvisible) {
   const items = [];
 
-  if (!_isPointInArea(position, chart.chartArea, chart._minPadding)) {
+  if (!includeInvisible && !chart.isPointInArea(position)) {
     return items;
   }
 
   const evaluationFunc = function(element, datasetIndex, index) {
+    if (!includeInvisible && !_isPointInArea(element, chart.chartArea, 0)) {
+      return;
+    }
     if (element.inRange(position.x, position.y, useFinalPosition)) {
       items.push({element, datasetIndex, index});
     }
   };
 
-  optimizedEvaluateItems(chart, axis, position, evaluationFunc, true);
+  evaluateInteractionItems(chart, axis, position, evaluationFunc, true);
   return items;
 }
 
 /**
- * Helper function to get the items nearest to the event position considering all visible items in the chart
+ * Helper function to get the items nearest to the event position for a radial chart
  * @param {Chart} chart - the chart to look at elements from
- * @param {object} position - the point to be nearest to
+ * @param {Point} position - the point to be nearest to, in relative coordinates
  * @param {string} axis - the axes along which to measure distance
- * @param {boolean} [intersect] - if true, only consider items that intersect the position
- * @param {boolean} [useFinalPosition] - use the elements animation target instead of current position
+ * @param {boolean} [useFinalPosition] - use the element's animation target instead of current position
  * @return {InteractionItem[]} the nearest items
  */
-function getNearestItems(chart, position, axis, intersect, useFinalPosition) {
-  const distanceMetric = getDistanceMetricForAxis(axis);
-  let minDistance = Number.POSITIVE_INFINITY;
+function getNearestRadialItems(chart, position, axis, useFinalPosition) {
   let items = [];
 
-  if (!_isPointInArea(position, chart.chartArea, chart._minPadding)) {
-    return items;
+  function evaluationFunc(element, datasetIndex, index) {
+    const {startAngle, endAngle} = element.getProps(['startAngle', 'endAngle'], useFinalPosition);
+    const {angle} = getAngleFromPoint(element, {x: position.x, y: position.y});
+
+    if (_angleBetween(angle, startAngle, endAngle)) {
+      items.push({element, datasetIndex, index});
+    }
   }
 
-  const evaluationFunc = function(element, datasetIndex, index) {
-    if (intersect && !element.inRange(position.x, position.y, useFinalPosition)) {
+  evaluateInteractionItems(chart, axis, position, evaluationFunc);
+  return items;
+}
+
+/**
+ * Helper function to get the items nearest to the event position for a cartesian chart
+ * @param {Chart} chart - the chart to look at elements from
+ * @param {Point} position - the point to be nearest to, in relative coordinates
+ * @param {string} axis - the axes along which to measure distance
+ * @param {boolean} [intersect] - if true, only consider items that intersect the position
+ * @param {boolean} [useFinalPosition] - use the element's animation target instead of current position
+ * @param {boolean} [includeInvisible] - include invisible points that are outside of the chart area
+ * @return {InteractionItem[]} the nearest items
+ */
+function getNearestCartesianItems(chart, position, axis, intersect, useFinalPosition, includeInvisible) {
+  let items = [];
+  const distanceMetric = getDistanceMetricForAxis(axis);
+  let minDistance = Number.POSITIVE_INFINITY;
+
+  function evaluationFunc(element, datasetIndex, index) {
+    const inRange = element.inRange(position.x, position.y, useFinalPosition);
+    if (intersect && !inRange) {
       return;
     }
 
     const center = element.getCenterPoint(useFinalPosition);
+    const pointInArea = !!includeInvisible || chart.isPointInArea(center);
+    if (!pointInArea && !inRange) {
+      return;
+    }
+
     const distance = distanceMetric(position, center);
     if (distance < minDistance) {
       items = [{element, datasetIndex, index}];
@@ -174,32 +170,56 @@ function getNearestItems(chart, position, axis, intersect, useFinalPosition) {
       // Can have multiple items at the same distance in which case we sort by size
       items.push({element, datasetIndex, index});
     }
-  };
+  }
 
-  optimizedEvaluateItems(chart, axis, position, evaluationFunc);
+  evaluateInteractionItems(chart, axis, position, evaluationFunc);
   return items;
 }
 
-function getAxisItems(chart, e, options, useFinalPosition) {
-  const position = getRelativePosition(e, chart);
+/**
+ * Helper function to get the items nearest to the event position considering all visible items in the chart
+ * @param {Chart} chart - the chart to look at elements from
+ * @param {Point} position - the point to be nearest to, in relative coordinates
+ * @param {string} axis - the axes along which to measure distance
+ * @param {boolean} [intersect] - if true, only consider items that intersect the position
+ * @param {boolean} [useFinalPosition] - use the element's animation target instead of current position
+ * @param {boolean} [includeInvisible] - include invisible points that are outside of the chart area
+ * @return {InteractionItem[]} the nearest items
+ */
+function getNearestItems(chart, position, axis, intersect, useFinalPosition, includeInvisible) {
+  if (!includeInvisible && !chart.isPointInArea(position)) {
+    return [];
+  }
+
+  return axis === 'r' && !intersect
+    ? getNearestRadialItems(chart, position, axis, useFinalPosition)
+    : getNearestCartesianItems(chart, position, axis, intersect, useFinalPosition, includeInvisible);
+}
+
+/**
+ * Helper function to get the items matching along the given X or Y axis
+ * @param {Chart} chart - the chart to look at elements from
+ * @param {Point} position - the point to be nearest to, in relative coordinates
+ * @param {string} axis - the axis to match
+ * @param {boolean} [intersect] - if true, only consider items that intersect the position
+ * @param {boolean} [useFinalPosition] - use the element's animation target instead of current position
+ * @return {InteractionItem[]} the nearest items
+ */
+function getAxisItems(chart, position, axis, intersect, useFinalPosition) {
   const items = [];
-  const axis = options.axis;
   const rangeMethod = axis === 'x' ? 'inXRange' : 'inYRange';
   let intersectsItem = false;
 
-  evaluateAllVisibleItems(chart, (element, datasetIndex, index) => {
-    if (element[rangeMethod](position[axis], useFinalPosition)) {
+  evaluateInteractionItems(chart, axis, position, (element, datasetIndex, index) => {
+    if (element[rangeMethod] && element[rangeMethod](position[axis], useFinalPosition)) {
       items.push({element, datasetIndex, index});
-    }
-
-    if (element.inRange(position.x, position.y, useFinalPosition)) {
-      intersectsItem = true;
+      intersectsItem = intersectsItem || element.inRange(position.x, position.y, useFinalPosition);
     }
   });
 
   // If we want to trigger on an intersect and we don't have any items
   // that intersect the position, return nothing
-  if (options.intersect && !intersectsItem) {
+  if (intersect && !intersectsItem) {
     return [];
   }
   return items;
@@ -210,6 +230,9 @@ function getAxisItems(chart, e, options, useFinalPosition) {
  * @namespace Chart.Interaction
  */
 export default {
+  // Part of the public API to facilitate developers creating their own modes
+  evaluateInteractionItems,
+
   // Helper function for different modes
   modes: {
     /**
@@ -227,9 +250,10 @@ export default {
       const position = getRelativePosition(e, chart);
       // Default axis for index mode is 'x' to match old behaviour
       const axis = options.axis || 'x';
+      const includeInvisible = options.includeInvisible || false;
       const items = options.intersect
-        ? getIntersectItems(chart, position, axis, useFinalPosition)
-        : getNearestItems(chart, position, axis, false, useFinalPosition);
+        ? getIntersectItems(chart, position, axis, useFinalPosition, includeInvisible)
+        : getNearestItems(chart, position, axis, false, useFinalPosition, includeInvisible);
       const elements = [];
 
       if (!items.length) {
@@ -262,9 +286,10 @@ export default {
     dataset(chart, e, options, useFinalPosition) {
       const position = getRelativePosition(e, chart);
       const axis = options.axis || 'xy';
+      const includeInvisible = options.includeInvisible || false;
       let items = options.intersect
-        ? getIntersectItems(chart, position, axis, useFinalPosition) :
-        getNearestItems(chart, position, axis, false, useFinalPosition);
+        ? getIntersectItems(chart, position, axis, useFinalPosition, includeInvisible) :
+        getNearestItems(chart, position, axis, false, useFinalPosition, includeInvisible);
 
       if (items.length > 0) {
         const datasetIndex = items[0].datasetIndex;
@@ -291,7 +316,8 @@ export default {
     point(chart, e, options, useFinalPosition) {
       const position = getRelativePosition(e, chart);
       const axis = options.axis || 'xy';
-      return getIntersectItems(chart, position, axis, useFinalPosition);
+      const includeInvisible = options.includeInvisible || false;
+      return getIntersectItems(chart, position, axis, useFinalPosition, includeInvisible);
     },
 
     /**
@@ -306,7 +332,8 @@ export default {
     nearest(chart, e, options, useFinalPosition) {
       const position = getRelativePosition(e, chart);
       const axis = options.axis || 'xy';
-      return getNearestItems(chart, position, axis, options.intersect, useFinalPosition);
+      const includeInvisible = options.includeInvisible || false;
+      return getNearestItems(chart, position, axis, options.intersect, useFinalPosition, includeInvisible);
     },
 
     /**
@@ -319,8 +346,8 @@ export default {
 		 * @return {InteractionItem[]} - items that are found
 		 */
     x(chart, e, options, useFinalPosition) {
-      options.axis = 'x';
-      return getAxisItems(chart, e, options, useFinalPosition);
+      const position = getRelativePosition(e, chart);
+      return getAxisItems(chart, position, 'x', options.intersect, useFinalPosition);
     },
 
     /**
@@ -333,8 +360,8 @@ export default {
 		 * @return {InteractionItem[]} - items that are found
 		 */
     y(chart, e, options, useFinalPosition) {
-      options.axis = 'y';
-      return getAxisItems(chart, e, options, useFinalPosition);
+      const position = getRelativePosition(e, chart);
+      return getAxisItems(chart, position, 'y', options.intersect, useFinalPosition);
     }
   }
 };

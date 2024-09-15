@@ -1,8 +1,9 @@
 # Bar Chart
+Demo selecting bar color based on the bar's y value.
 
 ```js chart-editor
 // <block:setup:2>
-var DATA_COUNT = 16;
+const DATA_COUNT = 16;
 Utils.srand(110);
 
 const actions = [
@@ -38,8 +39,8 @@ const data = {
 // <block:options:0>
 function colorize(opaque) {
   return (ctx) => {
-    var v = ctx.parsed.y;
-    var c = v < -50 ? '#D60000'
+    const v = ctx.parsed.y;
+    const c = v < -50 ? '#D60000'
       : v < 0 ? '#F46300'
       : v < 50 ? '#0358B6'
       : '#44DE28';
@@ -71,3 +72,10 @@ module.exports = {
   config,
 };
 ```
+
+## Docs
+* [Bar](../../charts/bar.md)
+* [Data structures (`labels`)](../../general/data-structures.md)
+  * [Dataset Configuration (`stack`)](../../general/data-structures.md#dataset-configuration)
+* [Options](../../general/options.md)
+  * [Scriptable Options](../../general/options.md#scriptable-options)

@@ -51,6 +51,51 @@ describe('Linear Scale', function() {
     expect(chart.scales.y.max).toBe(150);
   });
 
+  it('Should handle when only a min value is provided', () => {
+    var chart = window.acquireChart({
+      type: 'line',
+      data: {
+        datasets: [{
+          yAxisID: 'y',
+          data: [200]
+        }],
+      },
+      options: {
+        scales: {
+          y: {
+            type: 'linear',
+            min: 250
+          }
+        }
+      }
+    });
+
+    expect(chart.scales.y.min).toBe(250);
+  });
+
+  it('Should handle when only a max value is provided', () => {
+    var chart = window.acquireChart({
+      type: 'line',
+      data: {
+        datasets: [{
+          yAxisID: 'y',
+          data: [200]
+        }],
+      },
+      options: {
+        scales: {
+          y: {
+            type: 'linear',
+            max: 150
+          }
+        }
+      }
+    });
+
+    expect(chart.scales.y).not.toEqual(undefined); // must construct
+    expect(chart.scales.y.max).toBe(150);
+  });
+
   it('Should correctly determine the max & min of string data values', function() {
     var chart = window.acquireChart({
       type: 'bar',
@@ -192,6 +237,12 @@ describe('Linear Scale', function() {
 
     // Scale is now stacked
     chart.scales.y.options.stacked = true;
+    chart.update();
+
+    expect(chart.scales.y.min).toBe(30);
+    expect(chart.scales.y.max).toBe(90);
+
+    chart.scales.y.options.beginAtZero = true;
     chart.update();
 
     expect(chart.scales.y.min).toBe(0);
@@ -476,6 +527,56 @@ describe('Linear Scale', function() {
     expect(chart.scales.y.max).toBe(1);
   });
 
+  it('Should ensure that the scale has a max and min that are not equal - large positive numbers', function() {
+    // https://github.com/chartjs/Chart.js/issues/9377
+    var chart = window.acquireChart({
+      type: 'line',
+      data: {
+        datasets: [{
+          // Value larger than Number.MAX_SAFE_INTEGER
+          data: [10000000000000000]
+        }],
+        labels: ['a']
+      },
+      options: {
+        scales: {
+          y: {
+            type: 'linear'
+          }
+        }
+      }
+    });
+
+    expect(chart.scales.y).not.toEqual(undefined); // must construct
+    expect(chart.scales.y.min).toBe(10000000000000000 * 0.95);
+    expect(chart.scales.y.max).toBe(10000000000000000 * 1.05);
+  });
+
+  it('Should ensure that the scale has a max and min that are not equal - large negative numbers', function() {
+    // https://github.com/chartjs/Chart.js/issues/9377
+    var chart = window.acquireChart({
+      type: 'line',
+      data: {
+        datasets: [{
+          // Value larger than Number.MAX_SAFE_INTEGER
+          data: [-10000000000000000]
+        }],
+        labels: ['a']
+      },
+      options: {
+        scales: {
+          y: {
+            type: 'linear'
+          }
+        }
+      }
+    });
+
+    expect(chart.scales.y).not.toEqual(undefined); // must construct
+    expect(chart.scales.y.max).toBe(-10000000000000000 * 0.95);
+    expect(chart.scales.y.min).toBe(-10000000000000000 * 1.05);
+  });
+
   it('Should ensure that the scale has a max and min that are not equal when beginAtZero is set', function() {
     var chart = window.acquireChart({
       type: 'bar',
@@ -581,6 +682,51 @@ describe('Linear Scale', function() {
     expect(chart.scales.y.min).toBe(1);
     expect(chart.scales.y.max).toBe(11);
     expect(getLabels(chart.scales.y)).toEqual(['1', '3', '5', '7', '9', '11']);
+  });
+
+  it('Should not generate any ticks > max if max is specified', function() {
+    var chart = window.acquireChart({
+      type: 'line',
+      options: {
+        scales: {
+          x: {
+            type: 'linear',
+            min: 2.404e-8,
+            max: 2.4143e-8,
+            ticks: {
+              includeBounds: false,
+            },
+          },
+        },
+      },
+    });
+
+    expect(chart.scales.x.min).toBe(2.404e-8);
+    expect(chart.scales.x.max).toBe(2.4143e-8);
+    expect(chart.scales.x.ticks[chart.scales.x.ticks.length - 1].value).toBeLessThanOrEqual(2.4143e-8);
+  });
+
+  it('Should not generate insane amounts of ticks with small stepSize and large range', function() {
+    var chart = window.acquireChart({
+      type: 'bar',
+      options: {
+        scales: {
+          y: {
+            type: 'linear',
+            min: 1,
+            max: 1E10,
+            ticks: {
+              stepSize: 2,
+              autoSkip: false
+            }
+          }
+        }
+      }
+    });
+
+    expect(chart.scales.y.min).toBe(1);
+    expect(chart.scales.y.max).toBe(1E10);
+    expect(chart.scales.y.ticks.length).toBeLessThanOrEqual(1000);
   });
 
   it('Should create decimal steps if stepSize is a decimal number', function() {
@@ -995,7 +1141,9 @@ describe('Linear Scale', function() {
             type: 'linear',
             grid: {
               drawTicks: false,
-              drawBorder: false
+            },
+            border: {
+              display: false
             },
             title: {
               display: false,
@@ -1219,5 +1367,32 @@ describe('Linear Scale', function() {
     expect(scale.getPixelForValue(min)).toBeCloseToPixel(end);
     expect(scale.getValueForPixel(end)).toBeCloseTo(min, 4);
     expect(scale.getValueForPixel(start)).toBeCloseTo(max, 4);
+  });
+
+  it('should not throw errors when chart size is negative', function() {
+    function createChart() {
+      return window.acquireChart({
+        type: 'bar',
+        data: {
+          labels: [0, 1, 2, 3, 4, 5, 6, 7, '7+'],
+          datasets: [{
+            data: [29.05, 4, 15.69, 11.69, 2.84, 4, 0, 3.84, 4],
+          }],
+        },
+        options: {
+          plugins: false,
+          layout: {
+            padding: {top: 30, left: 1, right: 1, bottom: 1}
+          }
+        }
+      }, {
+        canvas: {
+          height: 0,
+          width: 0
+        }
+      });
+    }
+
+    expect(createChart).not.toThrow();
   });
 });

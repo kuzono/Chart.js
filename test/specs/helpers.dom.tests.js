@@ -254,6 +254,30 @@ describe('DOM helpers tests', function() {
     expect(canvas.style.width).toBe('400px');
   });
 
+  it ('should handle devicePixelRatio correctly', function() {
+    const chartWidth = 800;
+    const chartHeight = 400;
+    let devicePixelRatio = 0.8999999761581421; // 1.7999999523162842;
+    var chart = window.acquireChart({}, {
+      canvas: {
+        width: chartWidth,
+        height: chartHeight,
+      }
+    });
+
+    helpers.retinaScale(chart, devicePixelRatio, true);
+
+    var canvas = chart.canvas;
+    expect(canvas.width).toBe(Math.floor(chartWidth * devicePixelRatio));
+    expect(canvas.height).toBe(Math.floor(chartHeight * devicePixelRatio));
+
+    expect(chart.width).toBe(chartWidth);
+    expect(chart.height).toBe(chartHeight);
+
+    expect(canvas.style.width).toBe(`${chartWidth}px`);
+    expect(canvas.style.height).toBe(`${chartHeight}px`);
+  });
+
   describe('getRelativePosition', function() {
     it('should use offsetX/Y when available', function() {
       const event = {offsetX: 50, offsetY: 100};
@@ -427,5 +451,98 @@ describe('DOM helpers tests', function() {
       expect(dataX).not.toEqual(NaN);
       expect(dataY).not.toEqual(NaN);
     });
+
+    it('Should give consistent results for native and chart events', async function() {
+      let chartPosition = null;
+      const chart = window.acquireChart(
+        {
+          type: 'bar',
+          data: {
+            datasets: [{
+              data: [{x: 'first', y: 10}, {x: 'second', y: 5}, {x: 'third', y: 15}]
+            }]
+          },
+          options: {
+            onHover: (chartEvent) => {
+              chartPosition = Chart.helpers.getRelativePosition(chartEvent, chart);
+            }
+          }
+        });
+
+      const point = chart.getDatasetMeta(0).data[1];
+      const nativeEvent = await jasmine.triggerMouseEvent(chart, 'mousemove', point);
+      const nativePosition = Chart.helpers.getRelativePosition(nativeEvent, chart);
+
+      expect(chartPosition).not.toBeNull();
+      expect(nativePosition).toEqual({x: chartPosition.x, y: chartPosition.y});
+    });
+  });
+
+  it('should respect aspect ratio and container width', () => {
+    const container = document.createElement('div');
+    container.style.width = '200px';
+    container.style.height = '500px';
+
+    document.body.appendChild(container);
+
+    const target = document.createElement('div');
+    target.style.width = '500px';
+    target.style.height = '500px';
+    container.appendChild(target);
+
+    expect(helpers.getMaximumSize(target, 200, 500, 1)).toEqual(jasmine.objectContaining({width: 200, height: 200}));
+
+    document.body.removeChild(container);
+  });
+
+  it('should respect aspect ratio and container height', () => {
+    const container = document.createElement('div');
+    container.style.width = '500px';
+    container.style.height = '200px';
+
+    document.body.appendChild(container);
+
+    const target = document.createElement('div');
+    target.style.width = '500px';
+    target.style.height = '500px';
+    container.appendChild(target);
+
+    expect(helpers.getMaximumSize(target, 500, 200, 1)).toEqual(jasmine.objectContaining({width: 200, height: 200}));
+
+    document.body.removeChild(container);
+  });
+
+  it('should respect aspect ratio and skip container height', () => {
+    const container = document.createElement('div');
+    container.style.width = '500px';
+    container.style.height = '200px';
+
+    document.body.appendChild(container);
+
+    const target = document.createElement('div');
+    target.style.width = '500px';
+    target.style.height = '500px';
+    container.appendChild(target);
+
+    expect(helpers.getMaximumSize(target, undefined, undefined, 1)).toEqual(jasmine.objectContaining({width: 500, height: 500}));
+
+    document.body.removeChild(container);
+  });
+
+  it('should round non-integer container dimensions', () => {
+    const container = document.createElement('div');
+    container.style.width = '799.999px';
+    container.style.height = '299.999px';
+
+    document.body.appendChild(container);
+
+    const target = document.createElement('div');
+    target.style.width = '200px';
+    target.style.height = '100px';
+    container.appendChild(target);
+
+    expect(helpers.getMaximumSize(target, undefined, undefined, 2)).toEqual(jasmine.objectContaining({width: 800, height: 400}));
+
+    document.body.removeChild(container);
   });
 });

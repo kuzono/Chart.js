@@ -101,7 +101,7 @@ const config = {
           font: function(context) {
             if (context.tick && context.tick.major) {
               return {
-                style: 'bold',
+                weight: 'bold',
               };
             }
           }
@@ -124,3 +124,8 @@ module.exports = {
   config: config,
 };
 ```
+
+## Docs
+* [Line](../../charts/line.md)
+  * [`spanGaps`](../../charts/line.md#line-styling)
+* [Time Scale](../../axes/cartesian/time.md)

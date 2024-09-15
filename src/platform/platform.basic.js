@@ -3,7 +3,7 @@
  * @see https://github.com/chartjs/Chart.js/pull/4591#issuecomment-319575939
  */
 
-import BasePlatform from './platform.base';
+import BasePlatform from './platform.base.js';
 
 /**
  * Platform class for charts without access to the DOM or to many element properties
@@ -16,5 +16,8 @@ export default class BasicPlatform extends BasePlatform {
     // method, for example: https://github.com/kkapsner/CanvasBlocker
     // https://github.com/chartjs/Chart.js/issues/2807
     return item && item.getContext && item.getContext('2d') || null;
+  }
+  updateConfig(config) {
+    config.options.animation = false;
   }
 }

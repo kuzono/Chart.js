@@ -23,13 +23,12 @@ Namespace: `options.scales[scaleId]`
 
 Namespace: `options.scales[scaleId].ticks`
 
-| Name | Type | Default | Description
-| ---- | ---- | ------- | -----------
-| `count` | `number` | `undefined` | The number of ticks to generate. If specified, this overrides the automatic generation.
-| `format` | `object` | | The [`Intl.NumberFormat`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl/NumberFormat) options used by the default label formatter
-| `maxTicksLimit` | `number` | `11` | Maximum number of ticks and gridlines to show.
-| `precision` | `number` | | if defined and `stepSize` is not specified, the step size will be rounded to this many decimal places.
-| `stepSize` | `number` | | User-defined fixed step size for the scale. [more...](#step-size)
+| Name | Type | Scriptable | Default | Description
+| ---- | ---- | ------- | ------- | -----------
+| `count` | `number` | Yes | `undefined` | The number of ticks to generate. If specified, this overrides the automatic generation.
+| `format` | `object` | Yes | | The [`Intl.NumberFormat`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl/NumberFormat) options used by the default label formatter
+| `precision` | `number` | Yes | | if defined and `stepSize` is not specified, the step size will be rounded to this many decimal places.
+| `stepSize` | `number` | Yes | | User-defined fixed step size for the scale. [more...](#step-size)
 
 !!!include(axes/cartesian/_common_ticks.md)!!!
 
@@ -39,7 +38,7 @@ Namespace: `options.scales[scaleId].ticks`
 
 If set, the scale ticks will be enumerated by multiple of `stepSize`, having one tick per increment. If not set, the ticks are labeled automatically using the nice numbers algorithm.
 
-This example sets up a chart with a y axis that creates ticks at `0, 0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5`.
+This example sets up a chart with a y-axis that creates ticks at `0, 0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5`.
 
 ```javascript
 let options = {
@@ -57,7 +56,7 @@ let options = {
 
 ## Grace
 
-If the value is string ending with `%`, its treat as percentage. If number, its treat as value.
+If the value is a string ending with `%`, it's treated as a percentage. If a number, it's treated as a value.
 The value is added to the maximum data value and subtracted from the minimum data. This extends the scale range as if the data values were that much greater.
 
 ```js chart-editor

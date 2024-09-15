@@ -1,6 +1,6 @@
 
 /**
- * @typedef { import("../core/core.controller").default } Chart
+ * @typedef { import('../core/core.controller.js').default } Chart
  */
 
 /**
@@ -72,15 +72,12 @@ export default class BasePlatform {
   isAttached(canvas) { // eslint-disable-line no-unused-vars
     return true;
   }
-}
 
-/**
- * @interface ChartEvent
- * @typedef {object} ChartEvent
- * @prop {string} type - The event type name, possible values are:
- * 'contextmenu', 'mouseenter', 'mousedown', 'mousemove', 'mouseup', 'mouseout',
- * 'click', 'dblclick', 'keydown', 'keypress', 'keyup' and 'resize'
- * @prop {*} native - The original native event (null for emulated events, e.g. 'resize')
- * @prop {number} x - The mouse x position, relative to the canvas (null for incompatible events)
- * @prop {number} y - The mouse y position, relative to the canvas (null for incompatible events)
- */
+  /**
+   * Updates config with platform specific requirements
+   * @param {import('../core/core.config.js').default} config
+   */
+  updateConfig(config) { // eslint-disable-line no-unused-vars
+    // no-op
+  }
+}

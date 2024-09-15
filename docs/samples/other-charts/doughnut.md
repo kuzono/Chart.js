@@ -40,12 +40,36 @@ const actions = [
       if (data.datasets.length > 0) {
         data.labels.push('data #' + (data.labels.length + 1));
 
-        for (var index = 0; index < data.datasets.length; ++index) {
+        for (let index = 0; index < data.datasets.length; ++index) {
           data.datasets[index].data.push(Utils.rand(0, 100));
         }
 
         chart.update();
       }
+    }
+  },
+  {
+    name: 'Hide(0)',
+    handler(chart) {
+      chart.hide(0);
+    }
+  },
+  {
+    name: 'Show(0)',
+    handler(chart) {
+      chart.show(0);
+    }
+  },
+  {
+    name: 'Hide (0, 1)',
+    handler(chart) {
+      chart.hide(0, 1);
+    }
+  },
+  {
+    name: 'Show (0, 1)',
+    handler(chart) {
+      chart.show(0, 1);
     }
   },
   {
@@ -110,3 +134,6 @@ module.exports = {
   config: config,
 };
 ```
+
+## Docs
+* [Doughnut and Pie Charts](../../charts/doughnut.md)

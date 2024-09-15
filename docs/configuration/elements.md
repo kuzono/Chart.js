@@ -1,10 +1,10 @@
 # Elements
 
-While chart types provide settings to configure the styling of each dataset, you sometimes want to style **all datasets the same way**. A common example would be to stroke all of the bars in a bar chart with the same colour but change the fill per dataset. Options can be configured for four different types of elements: **[arc](#arc-configuration)**, **[lines](#line-configuration)**, **[points](#point-configuration)**, and **[bars](#bar-configuration)**. When set, these options apply to all objects of that type unless specifically overridden by the configuration attached to a dataset.
+While chart types provide settings to configure the styling of each dataset, you sometimes want to style **all datasets the same way**. A common example would be to stroke all the bars in a bar chart with the same colour but change the fill per dataset. Options can be configured for four different types of elements: **[arc](#arc-configuration)**, **[lines](#line-configuration)**, **[points](#point-configuration)**, and **[bars](#bar-configuration)**. When set, these options apply to all objects of that type unless specifically overridden by the configuration attached to a dataset.
 
 ## Global Configuration
 
-The element options can be specified per chart or globally. The global options for elements are defined in `Chart.defaults.elements`. For example, to set the border width of all bar charts globally you would do:
+The element options can be specified per chart or globally. The global options for elements are defined in `Chart.defaults.elements`. For example, to set the border width of all bar charts globally, you would do:
 
 ```javascript
 Chart.defaults.elements.bar.borderWidth = 2;
@@ -19,7 +19,7 @@ Namespace: `options.elements.point`, global point options: `Chart.defaults.eleme
 | Name | Type | Default | Description
 | ---- | ---- | ------- | -----------
 | `radius` | `number` | `3` | Point radius.
-| [`pointStyle`](#point-styles) | `string`\|`Image` | `'circle'` | Point style.
+| [`pointStyle`](#point-styles) | [`pointStyle`](#types) | `'circle'` | Point style.
 | `rotation` | `number` | `0` | Point rotation (in degrees).
 | `backgroundColor` | [`Color`](../general/colors.md) | `Chart.defaults.backgroundColor` | Point fill color.
 | `borderWidth` | `number` | `1` | Point stroke width.
@@ -30,7 +30,12 @@ Namespace: `options.elements.point`, global point options: `Chart.defaults.eleme
 
 ### Point Styles
 
-The following values are supported:
+#### Types
+
+The `pointStyle` argument accepts the following type of inputs: `string`, `Image` and `HTMLCanvasElement`
+
+#### Info
+When a string is provided, the following values are supported:
 
 - `'circle'`
 - `'cross'`
@@ -42,8 +47,9 @@ The following values are supported:
 - `'rectRot'`
 - `'star'`
 - `'triangle'`
+- `false`
 
-If the value is an image, that image is drawn on the canvas using [drawImage](https://developer.mozilla.org/en/docs/Web/API/CanvasRenderingContext2D/drawImage).
+If the value is an image or a canvas element, that image or canvas element is drawn on the canvas using [drawImage](https://developer.mozilla.org/en/docs/Web/API/CanvasRenderingContext2D/drawImage).
 
 ## Line Configuration
 
@@ -54,16 +60,16 @@ Namespace: `options.elements.line`, global line options: `Chart.defaults.element
 | Name | Type | Default | Description
 | ---- | ---- | ------- | -----------
 | `tension` | `number` | `0` | Bézier curve tension (`0` for no Bézier curves).
-| `backgroundColor` | [`Color`](../general/colors.md) | `Chart.defaults.backgroundColor` | Line fill color.
+| `backgroundColor` | [`Color`](/general/colors.md) | `Chart.defaults.backgroundColor` | Line fill color.
 | `borderWidth` | `number` | `3` | Line stroke width.
-| `borderColor` | [`Color`](../general/colors.md) | `Chart.defaults.borderColor` | Line stroke color.
+| `borderColor` | [`Color`](/general/colors.md) | `Chart.defaults.borderColor` | Line stroke color.
 | `borderCapStyle` | `string` | `'butt'` | Line cap style. See [MDN](https://developer.mozilla.org/en/docs/Web/API/CanvasRenderingContext2D/lineCap).
 | `borderDash` | `number[]` | `[]` | Line dash. See [MDN](https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/setLineDash).
 | `borderDashOffset` | `number` | `0.0` | Line dash offset. See [MDN](https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/lineDashOffset).
-| `borderJoinStyle` | `string` | `'miter'` | Line join style. See [MDN](https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/lineJoin).
+| `borderJoinStyle` | `'round'`\|`'bevel'`\|`'miter'` | `'miter'` | Line join style. See [MDN](https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/lineJoin).
 | `capBezierPoints` | `boolean` | `true` | `true` to keep Bézier control inside the chart, `false` for no restriction.
-| `cubicInterpolationMode` | `string` | `'default'` |  Interpolation mode to apply. [See more...](./charts/line.md/#cubicinterpolationmode)
-| `fill` | `boolean`\|`string` | `false` | How to fill the area under the line. See [area charts](../charts/area.md#filling-modes).
+| `cubicInterpolationMode` | `string` | `'default'` |  Interpolation mode to apply. [See more...](/charts/line.md#cubicinterpolationmode)
+| `fill` | `boolean`\|`string` | `false` | How to fill the area under the line. See [area charts](/charts/area.md#filling-modes).
 | `stepped` | `boolean` | `false` | `true` to show the line as a stepped line (`tension` will be ignored).
 
 ## Bar Configuration
@@ -74,12 +80,13 @@ Namespace: `options.elements.bar`, global bar options: `Chart.defaults.elements.
 
 | Name | Type | Default | Description
 | ---- | ---- | ------- | -----------
-| `backgroundColor` | [`Color`](../general/colors.md) | `Chart.defaults.backgroundColor` | Bar fill color.
+| `backgroundColor` | [`Color`](/general/colors.md) | `Chart.defaults.backgroundColor` | Bar fill color.
 | `borderWidth` | `number` | `0` | Bar stroke width.
-| `borderColor` | [`Color`](../general/colors.md) | `Chart.defaults.borderColor` | Bar stroke color.
-| `borderSkipped` | `string` | `'start'` | Skipped (excluded) border: `'start'`, `'end'`, `'bottom'`, `'left'`, `'top'` or `'right'`.
+| `borderColor` | [`Color`](/general/colors.md) | `Chart.defaults.borderColor` | Bar stroke color.
+| `borderSkipped` | `string` | `'start'` | Skipped (excluded) border: `'start'`, `'end'`, `'middle'`, `'bottom'`, `'left'`, `'top'`, `'right'` or `false`.
 | `borderRadius` | `number`\|`object` | `0` | The bar border radius (in pixels).
-| [`pointStyle`](#point-styles) | `string`\|`Image` | `'circle'` | Style of the point for legend.
+| `inflateAmount` | `number`\|`'auto'` | `'auto'` | The amount of pixels to inflate the bar rectangle(s) when drawing.
+| [`pointStyle`](#point-styles) | `string`\|`Image`\|`HTMLCanvasElement` | `'circle'` | Style of the point for legend.
 
 ## Arc Configuration
 
@@ -90,7 +97,11 @@ Namespace: `options.elements.arc`, global arc options: `Chart.defaults.elements.
 | Name | Type | Default | Description
 | ---- | ---- | ------- | -----------
 | `angle` - for polar only | `number` | `circumference / (arc count)` | Arc angle to cover.
-| `backgroundColor` | [`Color`](../general/colors.md) | `Chart.defaults.backgroundColor` | Arc fill color.
-| `borderAlign` | `string` | `'center'` | Arc stroke alignment.
-| `borderColor` | [`Color`](../general/colors.md) | `'#fff'` | Arc stroke color.
+| `backgroundColor` | [`Color`](/general/colors.md) | `Chart.defaults.backgroundColor` | Arc fill color.
+| `borderAlign` | `'center'`\|`'inner'` | `'center'` | Arc stroke alignment.
+| `borderColor` | [`Color`](/general/colors.md) | `'#fff'` | Arc stroke color.
+| `borderDash` | `number[]` | `[]` | Arc line dash. See [MDN](https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/setLineDash).
+| `borderDashOffset` | `number` | `0.0` | Arc line dash offset. See [MDN](https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/lineDashOffset).
+| `borderJoinStyle` | `'round'`\|`'bevel'`\|`'miter'` | `'bevel'`\|`'round'` | Line join style. See [MDN](https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/lineJoin). The default is `'round'` when `borderAlign` is `'inner'`
 | `borderWidth`| `number` | `2` | Arc stroke width.
+| `circular` | `boolean` | `true` | By default the Arc is curved. If `circular: false` the Arc will be flat

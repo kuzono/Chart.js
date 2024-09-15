@@ -43,7 +43,7 @@ const config = {
           font: {
             family: 'Comic Sans MS',
             size: 20,
-            style: 'bold',
+            weight: 'bold',
             lineHeight: 1.2,
           },
           padding: {top: 20, left: 0, right: 0, bottom: 0}
@@ -59,7 +59,7 @@ const config = {
             family: 'Times',
             size: 20,
             style: 'normal',
-            lineHeight: 1.2,
+            lineHeight: 1.2
           },
           padding: {top: 30, left: 0, right: 0, bottom: 0}
         }
@@ -74,3 +74,12 @@ module.exports = {
   config: config,
 };
 ```
+
+## Docs
+* [Line](../../charts/line.md)
+* [Data structures (`labels`)](../../general/data-structures.md)
+* [Axes Styling](../../axes/styling.md)
+* [Cartesian Axes](../../axes/cartesian/)
+  * [Common options to all cartesian axes](../../axes/cartesian/#common-options-to-all-cartesian-axes)
+* [Labeling Axes](../../axes/labelling.md)
+  * [Scale Title Configuration](../../axes/labelling.md#scale-title-configuration)

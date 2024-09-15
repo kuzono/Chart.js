@@ -61,7 +61,9 @@ describe('Legend block tests', function() {
 
     expect(chart.legend.legendItems).toEqual([{
       text: 'dataset1',
+      borderRadius: undefined,
       fillStyle: '#f31',
+      fontColor: '#666',
       hidden: false,
       lineCap: undefined,
       lineDash: undefined,
@@ -75,7 +77,9 @@ describe('Legend block tests', function() {
       datasetIndex: 0
     }, {
       text: 'dataset2',
+      borderRadius: undefined,
       fillStyle: 'rgba(0,0,0,0.1)',
+      fontColor: '#666',
       hidden: true,
       lineCap: undefined,
       lineDash: undefined,
@@ -89,7 +93,9 @@ describe('Legend block tests', function() {
       datasetIndex: 1
     }, {
       text: 'dataset3',
+      borderRadius: undefined,
       fillStyle: 'rgba(0,0,0,0.1)',
+      fontColor: '#666',
       hidden: false,
       lineCap: undefined,
       lineDash: undefined,
@@ -134,7 +140,9 @@ describe('Legend block tests', function() {
 
     expect(chart.legend.legendItems).toEqual([{
       text: 'dataset1',
+      borderRadius: undefined,
       fillStyle: '#f31',
+      fontColor: '#666',
       hidden: false,
       lineCap: 'round',
       lineDash: [2, 2],
@@ -148,7 +156,9 @@ describe('Legend block tests', function() {
       datasetIndex: 0
     }, {
       text: 'dataset2',
+      borderRadius: undefined,
       fillStyle: 'rgba(0,0,0,0.1)',
+      fontColor: '#666',
       hidden: true,
       lineCap: 'butt',
       lineDash: [],
@@ -162,7 +172,9 @@ describe('Legend block tests', function() {
       datasetIndex: 1
     }, {
       text: 'dataset3',
+      borderRadius: undefined,
       fillStyle: 'rgba(0,0,0,0.1)',
+      fontColor: '#666',
       hidden: false,
       lineCap: 'butt',
       lineDash: [],
@@ -214,7 +226,9 @@ describe('Legend block tests', function() {
 
     expect(chart.legend.legendItems).toEqual([{
       text: 'dataset3',
+      borderRadius: undefined,
       fillStyle: 'rgba(0,0,0,0.1)',
+      fontColor: '#666',
       hidden: false,
       lineCap: 'butt',
       lineDash: [],
@@ -228,7 +242,9 @@ describe('Legend block tests', function() {
       datasetIndex: 2
     }, {
       text: 'dataset2',
+      borderRadius: undefined,
       fillStyle: 'rgba(0,0,0,0.1)',
+      fontColor: '#666',
       hidden: true,
       lineCap: 'butt',
       lineDash: [],
@@ -242,7 +258,9 @@ describe('Legend block tests', function() {
       datasetIndex: 1
     }, {
       text: 'dataset1',
+      borderRadius: undefined,
       fillStyle: '#f31',
+      fontColor: '#666',
       hidden: false,
       lineCap: 'round',
       lineDash: [2, 2],
@@ -273,10 +291,11 @@ describe('Legend block tests', function() {
           hidden: true,
           borderJoinStyle: 'miter',
           data: [],
-          legendHidden: true
+          legendHidden: true,
         }, {
           label: 'dataset3',
           borderWidth: 10,
+          borderRadius: 10,
           borderColor: 'green',
           pointStyle: 'crossRot',
           data: []
@@ -299,7 +318,9 @@ describe('Legend block tests', function() {
 
     expect(chart.legend.legendItems).toEqual([{
       text: 'dataset1',
+      borderRadius: undefined,
       fillStyle: '#f31',
+      fontColor: '#666',
       hidden: false,
       lineCap: undefined,
       lineDash: undefined,
@@ -313,7 +334,9 @@ describe('Legend block tests', function() {
       datasetIndex: 0
     }, {
       text: 'dataset3',
+      borderRadius: undefined,
       fillStyle: 'rgba(0,0,0,0.1)',
+      fontColor: '#666',
       hidden: false,
       lineCap: undefined,
       lineDash: undefined,
@@ -369,7 +392,9 @@ describe('Legend block tests', function() {
 
     expect(chart.legend.legendItems).toEqual([{
       text: 'dataset3',
+      borderRadius: undefined,
       fillStyle: 'rgba(0,0,0,0.1)',
+      fontColor: '#666',
       hidden: false,
       lineCap: 'butt',
       lineDash: [],
@@ -383,7 +408,9 @@ describe('Legend block tests', function() {
       datasetIndex: 2
     }, {
       text: 'dataset2',
+      borderRadius: undefined,
       fillStyle: 'rgba(0,0,0,0.1)',
+      fontColor: '#666',
       hidden: true,
       lineCap: 'butt',
       lineDash: [],
@@ -397,7 +424,9 @@ describe('Legend block tests', function() {
       datasetIndex: 1
     }, {
       text: 'dataset1',
+      borderRadius: undefined,
       fillStyle: '#f31',
+      fontColor: '#666',
       hidden: false,
       lineCap: 'round',
       lineDash: [2, 2],
@@ -478,6 +507,70 @@ describe('Legend block tests', function() {
     });
   });
 
+  it('should draw legend with multiline labels', function() {
+    const chart = window.acquireChart({
+      type: 'doughnut',
+      data: {
+        labels: [
+          'ABCDE',
+          [
+            'ABCDE',
+            'ABCDE',
+          ],
+          [
+            'Some Text',
+            'Some Text',
+            'Some Text',
+          ],
+          'ABCDE',
+        ],
+        datasets: [
+          {
+            label: 'test',
+            data: [
+              73.42,
+              18.13,
+              7.54,
+              0.9,
+              0.0025,
+              1.8e-5,
+            ],
+            backgroundColor: [
+              '#0078C2',
+              '#56CAF5',
+              '#B1E3F9',
+              '#FBBC8D',
+              '#F6A3BE',
+              '#4EC2C1',
+            ],
+          },
+        ],
+      },
+      options: {
+        plugins: {
+          legend: {
+            labels: {
+              usePointStyle: true,
+              pointStyle: 'rect',
+            },
+            position: 'right',
+            align: 'center',
+            maxWidth: 860,
+          },
+        },
+        aspectRatio: 3,
+      },
+    });
+
+    // Check some basic assertions about the test setup
+    expect(chart.legend.legendHitBoxes.length).toBe(4);
+
+    // Check whether any legend items reach outside the established bounds
+    chart.legend.legendHitBoxes.forEach(function(item) {
+      expect(item.left + item.width).toBeLessThanOrEqual(chart.width);
+    });
+  });
+
   it('should draw items with a custom boxHeight', function() {
     var chart = window.acquireChart(
       {
@@ -528,7 +621,53 @@ describe('Legend block tests', function() {
 
     expect(chart.legend.legendItems).toEqual([{
       text: 'dataset1',
+      borderRadius: undefined,
       fillStyle: '#f31',
+      fontColor: '#666',
+      hidden: false,
+      lineCap: undefined,
+      lineDash: undefined,
+      lineDashOffset: undefined,
+      lineJoin: undefined,
+      lineWidth: 5,
+      strokeStyle: 'red',
+      pointStyle: undefined,
+      rotation: undefined,
+      textAlign: undefined,
+      datasetIndex: 0
+    }]);
+  });
+
+  it('should use the borderRadius in the legend', function() {
+    var chart = window.acquireChart({
+      type: 'bar',
+      data: {
+        datasets: [{
+          label: 'dataset1',
+          backgroundColor: ['#f31', '#666', '#14e'],
+          borderWidth: [5, 10, 15],
+          borderColor: ['red', 'green', 'blue'],
+          borderRadius: 10,
+          data: []
+        }],
+        labels: []
+      },
+      options: {
+        plugins: {
+          legend: {
+            labels: {
+              useBorderRadius: true,
+            }
+          }
+        }
+      }
+    });
+
+    expect(chart.legend.legendItems).toEqual([{
+      text: 'dataset1',
+      borderRadius: 10,
+      fillStyle: '#f31',
+      fontColor: '#666',
       hidden: false,
       lineCap: undefined,
       lineDash: undefined,
@@ -570,7 +709,9 @@ describe('Legend block tests', function() {
 
     expect(chart.legend.legendItems).toEqual([{
       text: 'dataset1',
+      borderRadius: undefined,
       fillStyle: 'rgb(50, 0, 0)',
+      fontColor: '#666',
       hidden: false,
       lineCap: undefined,
       lineDash: undefined,
@@ -627,7 +768,9 @@ describe('Legend block tests', function() {
 
     expect(chart.legend.legendItems).toEqual([{
       text: 'dataset1',
+      borderRadius: undefined,
       fillStyle: 'rgba(0,0,0,0.1)',
+      fontColor: '#666',
       hidden: false,
       lineCap: undefined,
       lineDash: undefined,
@@ -641,7 +784,9 @@ describe('Legend block tests', function() {
       datasetIndex: 0
     }, {
       text: 'dataset2',
+      borderRadius: undefined,
       fillStyle: '#f31',
+      fontColor: '#666',
       hidden: false,
       lineCap: undefined,
       lineDash: undefined,
@@ -699,7 +844,9 @@ describe('Legend block tests', function() {
 
     expect(chart.legend.legendItems).toEqual([{
       text: 'dataset1',
+      borderRadius: undefined,
       fillStyle: 'rgba(0,0,0,0.1)',
+      fontColor: '#666',
       hidden: false,
       lineCap: undefined,
       lineDash: undefined,
@@ -713,7 +860,9 @@ describe('Legend block tests', function() {
       datasetIndex: 0
     }, {
       text: 'dataset2',
+      borderRadius: undefined,
       fillStyle: '#f31',
+      fontColor: '#666',
       hidden: false,
       lineCap: undefined,
       lineDash: undefined,
@@ -955,6 +1104,82 @@ describe('Legend block tests', function() {
 
       await jasmine.triggerMouseEvent(chart, 'mousemove', chart.getDatasetMeta(0).data[0]);
       expect(leaveItem).toBe(chart.legend.legendItems[0]);
+    });
+
+    it('should call onLeave when the mouse leaves the canvas', async function() {
+      var hoverItem = null;
+      var leaveItem = null;
+
+      var chart = acquireChart({
+        type: 'line',
+        data: {
+          labels: ['A', 'B', 'C', 'D'],
+          datasets: [{
+            data: [10, 20, 30, 100]
+          }]
+        },
+        options: {
+          plugins: {
+            legend: {
+              onHover: function(_, item) {
+                hoverItem = item;
+              },
+              onLeave: function(_, item) {
+                leaveItem = item;
+              }
+            }
+          }
+        }
+      });
+
+      var hb = chart.legend.legendHitBoxes[0];
+      var el = {
+        x: hb.left + (hb.width / 2),
+        y: hb.top + (hb.height / 2)
+      };
+
+      await jasmine.triggerMouseEvent(chart, 'mousemove', el);
+      expect(hoverItem).toBe(chart.legend.legendItems[0]);
+
+      await jasmine.triggerMouseEvent(chart, 'mouseout');
+      expect(leaveItem).toBe(chart.legend.legendItems[0]);
+    });
+
+
+    it('should call onClick for the correct item when in RTL mode', async function() {
+      var clickItem = null;
+
+      var chart = acquireChart({
+        type: 'line',
+        data: {
+          labels: ['A', 'B', 'C', 'D'],
+          datasets: [{
+            data: [10, 20, 30, 100],
+            label: 'dataset 1'
+          }, {
+            data: [10, 20, 30, 100],
+            label: 'dataset 2'
+          }]
+        },
+        options: {
+          plugins: {
+            legend: {
+              onClick: function(_, item) {
+                clickItem = item;
+              },
+            }
+          }
+        }
+      });
+
+      var hb = chart.legend.legendHitBoxes[0];
+      var el = {
+        x: hb.left + (hb.width / 2),
+        y: hb.top + (hb.height / 2)
+      };
+
+      await jasmine.triggerMouseEvent(chart, 'click', el);
+      expect(clickItem).toBe(chart.legend.legendItems[0]);
     });
   });
 });

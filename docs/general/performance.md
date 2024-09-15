@@ -16,7 +16,7 @@ Chart.js is fastest if you provide data with indices that are unique, sorted, an
 
 Decimating your data will achieve the best results. When there is a lot of data to display on the graph, it doesn't make sense to show tens of thousands of data points on a graph that is only a few hundred pixels wide.
 
-The [decimation plugin](./configuration/decimation.md) can be used with line charts to decimate data before the chart is rendered. This will provide the best performance since it will reduce the memory needed to render the chart.
+The [decimation plugin](../configuration/decimation.md) can be used with line charts to decimate data before the chart is rendered. This will provide the best performance since it will reduce the memory needed to render the chart.
 
 Line charts are able to do [automatic data decimation during draw](#automatic-data-decimation-during-draw), when certain conditions are met. You should still consider decimating data yourself before passing it in for maximum performance since the automatic decimation occurs late in the chart life cycle.
 
@@ -24,11 +24,11 @@ Line charts are able to do [automatic data decimation during draw](#automatic-da
 
 ### Rotation
 
-[Specify a rotation value](./axes/cartesian/index.md#tick-configuration) by setting `minRotation` and `maxRotation` to the same value, which avoids the chart from having to automatically determine a value to use.
+[Specify a rotation value](../axes/cartesian/index.md#tick-configuration) by setting `minRotation` and `maxRotation` to the same value, which avoids the chart from having to automatically determine a value to use.
 
 ### Sampling
 
-Set the [`ticks.sampleSize`](./axes/cartesian/index.md#tick-configuration) option. This will determine how large your labels are by looking at only a subset of them in order to render axes more quickly. This works best if there is not a large variance in the size of your labels.
+Set the [`ticks.sampleSize`](../axes/cartesian/index.md#tick-configuration) option. This will determine how large your labels are by looking at only a subset of them in order to render axes more quickly. This works best if there is not a large variance in the size of your labels.
 
 ## Disable Animations
 
@@ -72,16 +72,16 @@ new Chart(ctx, {
 });
 ```
 
-## Parallel rendering with web workers (Chromium only)
+## Parallel rendering with web workers
 
-Chromium (Chrome: version 69, Edge: 79, Opera: 56) added the ability to [transfer rendering control of a canvas](https://developer.mozilla.org/en-US/docs/Web/API/HTMLCanvasElement/transferControlToOffscreen) to a web worker. Web workers can use the [OffscreenCanvas API](https://developer.mozilla.org/en-US/docs/Web/API/OffscreenCanvas) to render from a web worker onto canvases in the DOM. Chart.js is a canvas-based library and supports rendering in a web worker - just pass an OffscreenCanvas into the Chart constructor instead of a Canvas element. Note that as of today, this API is only supported in Chromium based browsers.
+As of 2023, modern browser have the ability to [transfer rendering control of a canvas](https://developer.mozilla.org/en-US/docs/Web/API/HTMLCanvasElement/transferControlToOffscreen) to a web worker. Web workers can use the [OffscreenCanvas API](https://developer.mozilla.org/en-US/docs/Web/API/OffscreenCanvas) to render from a web worker onto canvases in the DOM. Chart.js is a canvas-based library and supports rendering in a web worker - just pass an OffscreenCanvas into the Chart constructor instead of a Canvas element.
 
 By moving all Chart.js calculations onto a separate thread, the main thread can be freed up for other uses. Some tips and tricks when using Chart.js in a web worker:
 
 * Transferring data between threads can be expensive, so ensure that your config and data objects are as small as possible. Try generating them on the worker side if you can (workers can make HTTP requests!) or passing them to your worker as ArrayBuffers, which can be transferred quickly from one thread to another.
 * You can't transfer functions between threads, so if your config object includes functions you'll have to strip them out before transferring and then add them back later.
 * You can't access the DOM from worker threads, so Chart.js plugins that use the DOM (including any mouse interactions) will likely not work.
-* Ensure that you have a fallback if you support browsers other than the most modern Chromium browsers.
+* Ensure that you have a fallback if you support older browsers.
 * Resizing the chart must be done manually. See an example in the worker code below.
 
 Example main thread code:

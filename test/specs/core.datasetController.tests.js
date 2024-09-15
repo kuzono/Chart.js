@@ -1,4 +1,6 @@
 describe('Chart.DatasetController', function() {
+  describe('auto', jasmine.fixture.specs('core.datasetController'));
+
   it('should listen for dataset data insertions or removals', function() {
     var data = [0, 1, 2, 3, 4, 5];
     var chart = acquireChart({
@@ -249,6 +251,124 @@ describe('Chart.DatasetController', function() {
     expect(parsedYValues).toEqual([20, 30]);
   });
 
+  describe('labels array synchronization', function() {
+    const data1 = [
+      {x: 'One', name: 'One', y: 1, value: 1},
+      {x: 'Two', name: 'Two', y: 2, value: 2}
+    ];
+    const data2 = [
+      {x: 'Three', name: 'Three', y: 3, value: 3},
+      {x: 'Four', name: 'Four', y: 4, value: 4},
+      {x: 'Five', name: 'Five', y: 5, value: 5}
+    ];
+    [
+      true,
+      false,
+      {
+        xAxisKey: 'name',
+        yAxisKey: 'value'
+      }
+    ].forEach(function(parsing) {
+      describe('when parsing is ' + JSON.stringify(parsing), function() {
+        it('should remove old labels when data is updated', function() {
+          const chart = acquireChart({
+            type: 'line',
+            data: {
+              datasets: [{
+                data: data1
+              }]
+            },
+            options: {
+              parsing
+            }
+          });
+
+          chart.data.datasets[0].data = data2;
+          chart.update();
+
+          const meta = chart.getDatasetMeta(0);
+          const labels = meta.iScale.getLabels();
+          expect(labels).toEqual(data2.map(n => n.x));
+        });
+
+        it('should not remove any user added labels', function() {
+          const chart = acquireChart({
+            type: 'line',
+            data: {
+              datasets: [{
+                data: data1
+              }]
+            },
+            options: {
+              parsing
+            }
+          });
+
+          chart.data.labels.push('user-added');
+          chart.data.datasets[0].data = [];
+          chart.update();
+
+          const meta = chart.getDatasetMeta(0);
+          const labels = meta.iScale.getLabels();
+          expect(labels).toEqual(['user-added']);
+        });
+
+        it('should not remove any user defined labels', function() {
+          const chart = acquireChart({
+            type: 'line',
+            data: {
+              datasets: [{
+                data: data1
+              }],
+              labels: ['user1', 'user2']
+            },
+            options: {
+              parsing
+            }
+          });
+
+          const meta = chart.getDatasetMeta(0);
+
+          expect(meta.iScale.getLabels()).toEqual(['user1', 'user2'].concat(data1.map(n => n.x)));
+
+          chart.data.datasets[0].data = data2;
+          chart.update();
+
+          expect(meta.iScale.getLabels()).toEqual(['user1', 'user2'].concat(data2.map(n => n.x)));
+        });
+
+        it('should keep up with multiple datasets', function() {
+          const chart = acquireChart({
+            type: 'line',
+            data: {
+              datasets: [{
+                data: data1
+              }, {
+                data: data2
+              }],
+              labels: ['One', 'Three']
+            },
+            options: {
+              parsing
+            }
+          });
+
+          const scale = chart.scales.x;
+
+          expect(scale.getLabels()).toEqual(['One', 'Three', 'Two', 'Four', 'Five']);
+
+          chart.data.datasets[0].data = data2;
+          chart.data.datasets[1].data = data1;
+          chart.update();
+
+          expect(scale.getLabels()).toEqual(['One', 'Three', 'Four', 'Five', 'Two']);
+        });
+
+      });
+    });
+  });
+
+
   it('should synchronize metadata when data are inserted or removed and parsing is on', function() {
     const data = [0, 1, 2, 3, 4, 5];
     const chart = acquireChart({
@@ -268,6 +388,7 @@ describe('Chart.DatasetController', function() {
     last = meta.data[5];
     data.push(6, 7, 8);
     data.push(9);
+    chart.update();
     expect(meta.data.length).toBe(10);
     expect(meta.data[0]).toBe(first);
     expect(meta.data[5]).toBe(last);
@@ -275,6 +396,7 @@ describe('Chart.DatasetController', function() {
 
     last = meta.data[9];
     data.pop();
+    chart.update();
     expect(meta.data.length).toBe(9);
     expect(meta.data[0]).toBe(first);
     expect(meta.data.indexOf(last)).toBe(-1);
@@ -284,6 +406,7 @@ describe('Chart.DatasetController', function() {
     data.shift();
     data.shift();
     data.shift();
+    chart.update();
     expect(meta.data.length).toBe(6);
     expect(meta.data.indexOf(first)).toBe(-1);
     expect(meta.data[5]).toBe(last);
@@ -293,6 +416,7 @@ describe('Chart.DatasetController', function() {
     second = meta.data[1];
     last = meta.data[5];
     data.splice(1, 4, 10, 11);
+    chart.update();
     expect(meta.data.length).toBe(4);
     expect(meta.data[0]).toBe(first);
     expect(meta.data[3]).toBe(last);
@@ -301,6 +425,7 @@ describe('Chart.DatasetController', function() {
 
     data.unshift(12, 13, 14, 15);
     data.unshift(16, 17);
+    chart.update();
     expect(meta.data.length).toBe(10);
     expect(meta.data[6]).toBe(first);
     expect(meta.data[9]).toBe(last);
@@ -333,12 +458,14 @@ describe('Chart.DatasetController', function() {
     last = controller.getParsed(5);
     data.push({x: 6, y: 6}, {x: 7, y: 7}, {x: 8, y: 8});
     data.push({x: 9, y: 9});
+    chart.update();
     expect(meta.data.length).toBe(10);
     expect(controller.getParsed(0)).toBe(first);
     expect(controller.getParsed(5)).toBe(last);
 
     last = controller.getParsed(9);
     data.pop();
+    chart.update();
     expect(meta.data.length).toBe(9);
     expect(controller.getParsed(0)).toBe(first);
     expect(controller.getParsed(9)).toBe(undefined);
@@ -348,12 +475,14 @@ describe('Chart.DatasetController', function() {
     data.shift();
     data.shift();
     data.shift();
+    chart.update();
     expect(meta.data.length).toBe(6);
     expect(controller.getParsed(5)).toBe(last);
 
     first = controller.getParsed(0);
     last = controller.getParsed(5);
     data.splice(1, 4, {x: 10, y: 10}, {x: 11, y: 11});
+    chart.update();
     expect(meta.data.length).toBe(4);
     expect(controller.getParsed(0)).toBe(first);
     expect(controller.getParsed(3)).toBe(last);
@@ -361,14 +490,59 @@ describe('Chart.DatasetController', function() {
 
     data.unshift({x: 12, y: 12}, {x: 13, y: 13}, {x: 14, y: 14}, {x: 15, y: 15});
     data.unshift({x: 16, y: 16}, {x: 17, y: 17});
+    chart.update();
     expect(meta.data.length).toBe(10);
     expect(controller.getParsed(6)).toBe(first);
     expect(controller.getParsed(9)).toBe(last);
   });
 
+  it('should synchronize insert before removal when parsing is off', function() {
+    // https://github.com/chartjs/Chart.js/issues/9511
+    const data = [{x: 0, y: 1}, {x: 2, y: 7}, {x: 3, y: 5}];
+    var chart = acquireChart({
+      type: 'scatter',
+      data: {
+        datasets: [{
+          data: data,
+        }],
+      },
+      options: {
+        parsing: false,
+        scales: {
+          x: {
+            type: 'linear',
+            min: 0,
+            max: 10,
+          },
+          y: {
+            type: 'linear',
+            min: 0,
+            max: 10,
+          },
+        },
+      },
+    });
+
+    var meta = chart.getDatasetMeta(0);
+    var controller = meta.controller;
+
+    data.push({
+      x: 10,
+      y: 6
+    });
+    data.splice(0, 1);
+    chart.update();
+
+    expect(meta.data.length).toBe(3);
+    expect(controller.getParsed(0)).toBe(data[0]);
+    expect(controller.getParsed(2)).toBe(data[2]);
+  });
+
   it('should re-synchronize metadata when the data object reference changes', function() {
     var data0 = [0, 1, 2, 3, 4, 5];
     var data1 = [6, 7, 8];
+    var data2 = [1, 2, 3, 4, 5, 6, 7, 8];
+
     var chart = acquireChart({
       type: 'line',
       data: {
@@ -382,14 +556,17 @@ describe('Chart.DatasetController', function() {
 
     expect(meta.data.length).toBe(6);
     expect(meta._parsed.map(p => p.y)).toEqual(data0);
+    const point0 = meta.data[0];
 
     chart.data.datasets[0].data = data1;
     chart.update();
 
     expect(meta.data.length).toBe(3);
     expect(meta._parsed.map(p => p.y)).toEqual(data1);
+    expect(meta.data[0]).toEqual(point0);
 
     data1.push(9);
+    chart.update();
     expect(meta.data.length).toBe(4);
 
     chart.data.datasets[0].data = data0;
@@ -397,6 +574,59 @@ describe('Chart.DatasetController', function() {
 
     expect(meta.data.length).toBe(6);
     expect(meta._parsed.map(p => p.y)).toEqual(data0);
+
+    chart.data.datasets[0].data = data2;
+    chart.update();
+
+    expect(meta.data.length).toBe(8);
+    expect(meta._parsed.map(p => p.y)).toEqual(data2);
+  });
+
+  it('should re-synchronize metadata when the data object reference changes, with animation', function() {
+    var data0 = [0, 1, 2, 3, 4, 5];
+    var data1 = [6, 7, 8];
+    var data2 = [1, 2, 3, 4, 5, 6, 7, 8];
+
+    var chart = acquireChart({
+      type: 'line',
+      data: {
+        datasets: [{
+          data: data0
+        }]
+      },
+      options: {
+        animation: true
+      }
+    });
+
+    var meta = chart.getDatasetMeta(0);
+
+    expect(meta.data.length).toBe(6);
+    expect(meta._parsed.map(p => p.y)).toEqual(data0);
+    const point0 = meta.data[0];
+
+    chart.data.datasets[0].data = data1;
+    chart.update();
+
+    expect(meta.data.length).toBe(3);
+    expect(meta._parsed.map(p => p.y)).toEqual(data1);
+    expect(meta.data[0]).toEqual(point0);
+
+    data1.push(9);
+    chart.update();
+    expect(meta.data.length).toBe(4);
+
+    chart.data.datasets[0].data = data0;
+    chart.update();
+
+    expect(meta.data.length).toBe(6);
+    expect(meta._parsed.map(p => p.y)).toEqual(data0);
+
+    chart.data.datasets[0].data = data2;
+    chart.update();
+
+    expect(meta.data.length).toBe(8);
+    expect(meta._parsed.map(p => p.y)).toEqual(data2);
   });
 
   it('should re-synchronize metadata when data are unusually altered', function() {
@@ -539,13 +769,13 @@ describe('Chart.DatasetController', function() {
     });
 
     expect(chart._stacks).toEqual({
-      'x.y.1.bar': {
-        0: {0: 1, 2: 3},
-        1: {0: 10, 2: 30}
+      'x.y.1': {
+        0: {0: 1, 2: 3, _top: 2, _bottom: null, _visualValues: {0: 1, 2: 3}},
+        1: {0: 10, 2: 30, _top: 2, _bottom: null, _visualValues: {0: 10, 2: 30}}
       },
-      'x.y.2.bar': {
-        0: {1: 2},
-        1: {1: 20}
+      'x.y.2': {
+        0: {1: 2, _top: 1, _bottom: null, _visualValues: {1: 2}},
+        1: {1: 20, _top: 1, _bottom: null, _visualValues: {1: 20}}
       }
     });
 
@@ -553,13 +783,13 @@ describe('Chart.DatasetController', function() {
     chart.update();
 
     expect(chart._stacks).toEqual({
-      'x.y.1.bar': {
-        0: {0: 1},
-        1: {0: 10}
+      'x.y.1': {
+        0: {0: 1, _top: 2, _bottom: null, _visualValues: {0: 1}},
+        1: {0: 10, _top: 2, _bottom: null, _visualValues: {0: 10}}
       },
-      'x.y.2.bar': {
-        0: {1: 2, 2: 3},
-        1: {1: 20, 2: 30}
+      'x.y.2': {
+        0: {1: 2, 2: 3, _top: 2, _bottom: null, _visualValues: {1: 2, 2: 3}},
+        1: {1: 20, 2: 30, _top: 2, _bottom: null, _visualValues: {1: 20, 2: 30}}
       }
     });
   });
@@ -583,13 +813,13 @@ describe('Chart.DatasetController', function() {
     });
 
     expect(chart._stacks).toEqual({
-      'x.y.1.bar': {
-        0: {0: 1, 2: 3},
-        1: {0: 10, 2: 30}
+      'x.y.1': {
+        0: {0: 1, 2: 3, _top: 2, _bottom: null, _visualValues: {0: 1, 2: 3}},
+        1: {0: 10, 2: 30, _top: 2, _bottom: null, _visualValues: {0: 10, 2: 30}}
       },
-      'x.y.2.bar': {
-        0: {1: 2},
-        1: {1: 20}
+      'x.y.2': {
+        0: {1: 2, _top: 1, _bottom: null, _visualValues: {1: 2}},
+        1: {1: 20, _top: 1, _bottom: null, _visualValues: {1: 20}}
       }
     });
 
@@ -597,13 +827,13 @@ describe('Chart.DatasetController', function() {
     chart.update();
 
     expect(chart._stacks).toEqual({
-      'x.y.1.bar': {
-        0: {0: 1, 2: 4},
-        1: {0: 10}
+      'x.y.1': {
+        0: {0: 1, 2: 4, _top: 2, _bottom: null, _visualValues: {0: 1, 2: 4}},
+        1: {0: 10, _top: 2, _bottom: null, _visualValues: {0: 10}}
       },
-      'x.y.2.bar': {
-        0: {1: 2},
-        1: {1: 20}
+      'x.y.2': {
+        0: {1: 2, _top: 1, _bottom: null, _visualValues: {1: 2}},
+        1: {1: 20, _top: 1, _bottom: null, _visualValues: {1: 20}}
       }
     });
   });
@@ -699,6 +929,29 @@ describe('Chart.DatasetController', function() {
     Chart.defaults.parsing = originalDefault;
   });
 
+  it('should not fail to produce stacks when parsing is off', function() {
+    var chart = acquireChart({
+      type: 'line',
+      data: {
+        datasets: [{
+          data: [{x: 1, y: 10}]
+        }, {
+          data: [{x: 1, y: 20}]
+        }]
+      },
+      options: {
+        parsing: false,
+        scales: {
+          x: {stacked: true},
+          y: {stacked: true}
+        }
+      }
+    });
+
+    var meta = chart.getDatasetMeta(0);
+    expect(meta._parsed[0]._stacks).toEqual(jasmine.objectContaining({y: {0: 10, 1: 20, _top: 1, _bottom: null, _visualValues: {0: 10, 1: 20}}}));
+  });
+
   describe('resolveDataElementOptions', function() {
     it('should cache options when possible', function() {
       const chart = acquireChart({
@@ -764,6 +1017,52 @@ describe('Chart.DatasetController', function() {
       expect(opts0.$shared).not.toBeTrue();
       expect(Object.isFrozen(opts0)).toBeFalse();
     });
+
+    it('should support nested scriptable options', function() {
+      const chart = acquireChart({
+        type: 'line',
+        data: {
+          datasets: [{
+            data: [100, 120, 130],
+            fill: {
+              value: (ctx) => ctx.type === 'dataset' ? 75 : 0
+            }
+          }]
+        },
+      });
+
+      const controller = chart.getDatasetMeta(0).controller;
+      const opts = controller.resolveDatasetElementOptions();
+      expect(opts).toEqualOptions({
+        fill: {
+          value: 75
+        }
+      });
+    });
+
+    it('should support nested scriptable defaults', function() {
+      Chart.defaults.datasets.line.fill = {
+        value: (ctx) => ctx.type === 'dataset' ? 75 : 0
+      };
+      const chart = acquireChart({
+        type: 'line',
+        data: {
+          datasets: [{
+            data: [100, 120, 130],
+          }]
+        },
+      });
+
+      const controller = chart.getDatasetMeta(0).controller;
+      const opts = controller.resolveDatasetElementOptions();
+      expect(opts).toEqualOptions({
+        fill: {
+          value: 75
+        }
+      });
+      delete Chart.defaults.datasets.line.fill;
+    });
+
   });
 
   describe('_resolveAnimations', function() {
@@ -952,6 +1251,59 @@ describe('Chart.DatasetController', function() {
         parsed: {x: 1, y: 1},
         raw: {x: 1, y: 1},
         mode: 'datatest2'
+      }));
+
+      chart.data.datasets[0].data.unshift({x: -1, y: -1});
+      chart.update();
+      expect(meta.controller.getContext(0, true, 'unshift')).toEqual(jasmine.objectContaining({
+        active: true,
+        datasetIndex: 0,
+        dataset: chart.data.datasets[0],
+        dataIndex: 0,
+        element: meta.data[0],
+        index: 0,
+        parsed: {x: -1, y: -1},
+        raw: {x: -1, y: -1},
+        mode: 'unshift'
+      }));
+      expect(meta.controller.getContext(2, true, 'unshift2')).toEqual(jasmine.objectContaining({
+        active: true,
+        datasetIndex: 0,
+        dataset: chart.data.datasets[0],
+        dataIndex: 2,
+        element: meta.data[2],
+        index: 2,
+        parsed: {x: 1, y: 1},
+        raw: {x: 1, y: 1},
+        mode: 'unshift2'
+      }));
+
+      chart.data.datasets.unshift({data: [{x: 10, y: 20}]});
+      chart.update();
+      meta = chart.getDatasetMeta(0);
+      expect(meta.controller.getContext(0, true, 'unshift3')).toEqual(jasmine.objectContaining({
+        active: true,
+        datasetIndex: 0,
+        dataset: chart.data.datasets[0],
+        dataIndex: 0,
+        element: meta.data[0],
+        index: 0,
+        parsed: {x: 10, y: 20},
+        raw: {x: 10, y: 20},
+        mode: 'unshift3'
+      }));
+
+      meta = chart.getDatasetMeta(1);
+      expect(meta.controller.getContext(2, true, 'unshift4')).toEqual(jasmine.objectContaining({
+        active: true,
+        datasetIndex: 1,
+        dataset: chart.data.datasets[1],
+        dataIndex: 2,
+        element: meta.data[2],
+        index: 2,
+        parsed: {x: 1, y: 1},
+        raw: {x: 1, y: 1},
+        mode: 'unshift4'
       }));
     });
   });

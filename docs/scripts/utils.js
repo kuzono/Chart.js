@@ -1,7 +1,7 @@
 import colorLib from '@kurkle/color';
 import {DateTime} from 'luxon';
 import 'chartjs-adapter-luxon';
-import {valueOrDefault} from '../../dist/helpers.esm';
+import {valueOrDefault} from '../../dist/helpers.js';
 
 // Adapted from http://indiegamr.com/generate-repeatable-random-numbers-in-js/
 var _seed = Date.now();
@@ -154,4 +154,8 @@ export function newDate(days) {
 
 export function newDateString(days) {
   return DateTime.now().plus({days}).toISO();
+}
+
+export function parseISODate(str) {
+  return DateTime.fromISO(str);
 }

@@ -3,7 +3,7 @@
 Both [line](./line.md) and [radar](./radar.md) charts support a `fill` option on the dataset object which can be used to create space between two datasets or a dataset and a boundary, i.e. the scale `origin`, `start,` or `end` (see [filling modes](#filling-modes)).
 
 :::tip Note
-This feature is implemented by the [`filler` plugin](https://github.com/chartjs/Chart.js/blob/master/src/plugins/plugin.filler.js).
+This feature is implemented by the [`filler` plugin](https://github.com/chartjs/Chart.js/blob/master/src/plugins/plugin.filler/index.js).
 :::
 
 ## Filling modes
@@ -16,6 +16,7 @@ This feature is implemented by the [`filler` plugin](https://github.com/chartjs/
 | Disabled <sup>1</sup> | `boolean` | `false` |
 | Stacked value below | `string` | `'stack'` |
 | Axis value | `object` | `{ value: number; }` |
+| Shape (fill inside line) | `string` | `'shape'` |
 
 > <sup>1</sup> for backward compatibility, `fill: true` is equivalent to `fill: 'origin'`<br/>
 
@@ -64,9 +65,12 @@ new Chart(ctx, {
 
 ## Configuration
 
+Namespace: `options.plugins.filler`
+
 | Option | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
-| [`plugins.filler.propagate`](#propagate) | `boolean` | `true` | Fill propagation when target is hidden.
+| `drawTime` | `string` | `beforeDatasetDraw` | Filler draw time. Supported values: `'beforeDraw'`, `'beforeDatasetDraw'`, `'beforeDatasetsDraw'`
+| [`propagate`](#propagate) | `boolean` | `true` | Fill propagation when target is hidden.
 
 ### propagate
 

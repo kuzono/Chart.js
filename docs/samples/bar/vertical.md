@@ -35,7 +35,7 @@ const actions = [
       if (data.datasets.length > 0) {
         data.labels = Utils.months({count: data.labels.length + 1});
 
-        for (var index = 0; index < data.datasets.length; ++index) {
+        for (let index = 0; index < data.datasets.length; ++index) {
           data.datasets[index].data.push(Utils.rand(-100, 100));
         }
 
@@ -113,3 +113,7 @@ module.exports = {
   config: config,
 };
 ```
+
+## Docs
+* [Bar](../../charts/bar.md)
+* [Data structures (`labels`)](../../general/data-structures.md)

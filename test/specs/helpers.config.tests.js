@@ -99,6 +99,15 @@ describe('Chart.helpers.config', function() {
       expect(resolver.getter).toEqual('options getter');
     });
 
+    it('should not fail on when options are frozen', function() {
+      function create() {
+        const defaults = Object.freeze({default: true});
+        const options = Object.freeze({value: true});
+        return _createResolver([options, defaults]);
+      }
+      expect(create).not.toThrow();
+    });
+
     describe('_fallback', function() {
       it('should follow simple _fallback', function() {
         const defaults = {
@@ -284,7 +293,7 @@ describe('Chart.helpers.config', function() {
         });
       });
 
-      it('should fallback throuhg multiple routes', function() {
+      it('should fallback through multiple routes', function() {
         const descriptors = {
           _fallback: 'level1',
           level1: {
@@ -472,7 +481,43 @@ describe('Chart.helpers.config', function() {
           'numbers',
         ]);
       });
+    });
+    describe('setting values', function() {
+      it('should set values to first scope', function() {
+        const defaults = {
+          value: true
+        };
+        const options = {};
+        const resolver = _createResolver([options, defaults]);
+        resolver.value = false;
+        expect(options.value).toBeFalse();
+        expect(defaults.value).toBeTrue();
+        expect(resolver.value).toBeFalse();
+      });
 
+      it('should set values of sub-objects to first scope', function() {
+        const defaults = {
+          sub: {
+            value: true
+          }
+        };
+        const options = {};
+        const resolver = _createResolver([options, defaults]);
+        resolver.sub.value = false;
+        expect(options.sub.value).toBeFalse();
+        expect(defaults.sub.value).toBeTrue();
+        expect(resolver.sub.value).toBeFalse();
+      });
+
+      it('should throw when setting a value and options is frozen', function() {
+        const defaults = Object.freeze({default: true});
+        const options = Object.freeze({value: true});
+        const resolver = _createResolver([options, defaults]);
+        function set() {
+          resolver.value = false;
+        }
+        expect(set).toThrow();
+      });
     });
   });
 
@@ -609,6 +654,45 @@ describe('Chart.helpers.config', function() {
       });
     });
 
+    it('should call _fallback with proper value from array when descriptor is object', function() {
+      const spy = jasmine.createSpy('fallback');
+      const descriptors = {
+        items: {
+          _fallback: spy
+        }
+      };
+      const options = {
+        items: [{test: true}]
+      };
+      const resolver = _createResolver([options, descriptors]);
+      const opts = _attachContext(resolver, {dymmy: true});
+      const item0 = opts.items[0];
+      expect(item0.test).toEqual(true);
+      expect(spy).toHaveBeenCalledWith('items', options.items[0]);
+    });
+
+    it('should call _fallback with proper value from array when descriptor and defaults are objects', function() {
+      const spy = jasmine.createSpy('fallback');
+      const descriptors = {
+        items: {
+          _fallback: spy
+        }
+      };
+      const defaults = {
+        items: {
+          type: 'defaultType'
+        }
+      };
+      const options = {
+        items: [{test: true}]
+      };
+      const resolver = _createResolver([options, defaults, descriptors]);
+      const opts = _attachContext(resolver, {dymmy: true});
+      const item0 = opts.items[0];
+      expect(item0.test).toEqual(true);
+      expect(spy).toHaveBeenCalledWith('items', options.items[0]);
+    });
+
     it('should support overriding options', function() {
       const options = {
         fn1: ctx => ctx.index,
@@ -707,6 +791,46 @@ describe('Chart.helpers.config', function() {
       const fn = opts.scales.time.adapters.date.locale.method;
       expect(typeof fn).toBe('function');
       expect(fn()).toEqual('ok');
+    });
+
+    it('should not create proxy for objects with custom constructor', function() {
+      class MyClass {
+        constructor() {
+          this.string = 'test string';
+        }
+        method(arg) {
+          return arg === undefined ? 'ok' : 'fail';
+        }
+      }
+
+      const defaults = {
+        test: new MyClass()
+      };
+
+      const resolver = _createResolver([{}, defaults]);
+      const opts = _attachContext(resolver, {index: 1});
+      const fn = opts.test.method;
+      expect(typeof fn).toBe('function');
+      expect(fn()).toEqual('ok');
+      expect(opts.test.string).toEqual('test string');
+      expect(opts.test.constructor).toEqual(MyClass);
+    });
+
+    it('should properly set value to object in array of objects', function() {
+      const defaults = {};
+      const options = {
+        annotations: [{
+          value: 10
+        }, {
+          value: 20
+        }]
+      };
+      const resolver = _attachContext(_createResolver([options, defaults]), {test: true});
+      expect(resolver.annotations[0].value).toEqual(10);
+
+      resolver.annotations[0].value = 15;
+      expect(options.annotations[0].value).toEqual(15);
+      expect(options.annotations[1].value).toEqual(20);
     });
 
     describe('_indexable and _scriptable', function() {

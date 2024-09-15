@@ -57,11 +57,19 @@ const data = {
 // Create a custom tooltip positioner to put at the bottom of the chart area
 components.Tooltip.positioners.bottom = function(items) {
   const pos = components.Tooltip.positioners.average(items);
-  const chart = this._chart;
+
+  // Happens when nothing is found
+  if (pos === false) {
+    return false;
+  }
+
+  const chart = this.chart;
 
   return {
     x: pos.x,
     y: chart.chartArea.bottom,
+    xAlign: 'center',
+    yAlign: 'bottom',
   };
 };
 
@@ -91,3 +99,10 @@ module.exports = {
   config: config,
 };
 ```
+
+## Docs 
+* [Data structures (`labels`)](../../general/data-structures.md)
+* [Line](../../charts/line.md)
+* [Tooltip](../../configuration/tooltip.md)
+  * [Position Modes](../../configuration/tooltip.md#position-modes)
+  * [Custom Position Modes](../../configuration/tooltip.md#custom-position-modes)

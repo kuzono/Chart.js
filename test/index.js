@@ -18,10 +18,19 @@ jasmine.fixture = {
 
 jasmine.triggerMouseEvent = triggerMouseEvent;
 
-beforeEach(function() {
+// Set a fixed time zone (and, in particular, disable Daylight Saving Time) for
+// more stable test results.
+window.moment.tz.setDefault('Etc/UTC');
+
+beforeAll(() => {
+  // Disable colors plugin for tests.
+  window.Chart.defaults.plugins.colors.enabled = false;
+});
+
+beforeEach(() => {
   addMatchers();
 });
 
-afterEach(function() {
+afterEach(() => {
   releaseCharts();
 });

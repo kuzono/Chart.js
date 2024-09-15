@@ -1,8 +1,11 @@
-import {_angleBetween, _angleDiff, _normalizeAngle} from './helpers.math';
+import {_angleBetween, _angleDiff, _isBetween, _normalizeAngle} from './helpers.math.js';
+import {createContext} from './helpers.options.js';
+import {isPatternOrGradient} from './helpers.color.js';
 
 /**
- * @typedef { import("../elements/element.line").default } LineElement
- * @typedef { import("../elements/element.point").default } PointElement
+ * @typedef { import('../elements/element.line.js').default } LineElement
+ * @typedef { import('../elements/element.point.js').default } PointElement
+ * @typedef {{start: number, end: number, loop: boolean, style?: any}} Segment
  */
 
 function propertyFn(property) {
@@ -14,17 +17,18 @@ function propertyFn(property) {
     };
   }
   return {
-    between: (n, s, e) => n >= s && n <= e,
+    between: _isBetween,
     compare: (a, b) => a - b,
     normalize: x => x
   };
 }
 
-function makeSubSegment(start, end, loop, count) {
+function normalizeSegment({start, end, count, loop, style}) {
   return {
     start: start % count,
     end: end % count,
-    loop: loop && (end - start + 1) % count === 0
+    loop: loop && (end - start + 1) % count === 0,
+    style
   };
 }
 
@@ -53,7 +57,7 @@ function getSegment(segment, points, bounds) {
   if (end < start) {
     end += count;
   }
-  return {start, end, loop};
+  return {start, end, loop, style: segment.style};
 }
 
 /**
@@ -62,6 +66,7 @@ function getSegment(segment, points, bounds) {
  * @param {number} segment.start - start index of the segment, referring the points array
  * @param {number} segment.end - end index of the segment, referring the points array
  * @param {boolean} segment.loop - indicates that the segment is a loop
+ * @param {object} [segment.style] - segment style
  * @param {PointElement[]} points - the points that this segment refers to
  * @param {object} [bounds]
  * @param {string} bounds.property - the property of a `PointElement` we are bounding. `x`, `y` or `angle`.
@@ -77,7 +82,7 @@ export function _boundSegment(segment, points, bounds) {
   const {property, start: startBound, end: endBound} = bounds;
   const count = points.length;
   const {compare, between, normalize} = propertyFn(property);
-  const {start, end, loop} = getSegment(segment, points, bounds);
+  const {start, end, loop, style} = getSegment(segment, points, bounds);
 
   const result = [];
   let inside = false;
@@ -97,6 +102,11 @@ export function _boundSegment(segment, points, bounds) {
     }
 
     value = normalize(point[property]);
+
+    if (value === prevValue) {
+      continue;
+    }
+
     inside = between(value, startBound, endBound);
 
     if (subStart === null && shouldStart()) {
@@ -104,7 +114,7 @@ export function _boundSegment(segment, points, bounds) {
     }
 
     if (subStart !== null && shouldStop()) {
-      result.push(makeSubSegment(subStart, i, loop, count));
+      result.push(normalizeSegment({start: subStart, end: i, loop, count, style}));
       subStart = null;
     }
     prev = i;
@@ -112,7 +122,7 @@ export function _boundSegment(segment, points, bounds) {
   }
 
   if (subStart !== null) {
-    result.push(makeSubSegment(subStart, end, loop, count));
+    result.push(normalizeSegment({start: subStart, end, loop, count, style}));
   }
 
   return result;
@@ -149,7 +159,7 @@ function findStartAndEnd(points, count, loop, spanGaps) {
   let end = count - 1;
 
   if (loop && !spanGaps) {
-    // loop and not spaning gaps, first find a gap to start from
+    // loop and not spanning gaps, first find a gap to start from
     while (start < count && !points[start].skip) {
       start++;
     }
@@ -221,9 +231,11 @@ function solidSegments(points, start, max, loop) {
  * Compute the continuous segments that define the whole line
  * There can be skipped points within a segment, if spanGaps is true.
  * @param {LineElement} line
+ * @param {object} [segmentOptions]
+ * @return {Segment[]}
  * @private
  */
-export function _computeSegments(line) {
+export function _computeSegments(line, segmentOptions) {
   const points = line.points;
   const spanGaps = line.options.spanGaps;
   const count = points.length;
@@ -236,10 +248,117 @@ export function _computeSegments(line) {
   const {start, end} = findStartAndEnd(points, count, loop, spanGaps);
 
   if (spanGaps === true) {
-    return [{start, end, loop}];
+    return splitByStyles(line, [{start, end, loop}], points, segmentOptions);
   }
 
   const max = end < start ? end + count : end;
   const completeLoop = !!line._fullLoop && start === 0 && end === count - 1;
-  return solidSegments(points, start, max, completeLoop);
+  return splitByStyles(line, solidSegments(points, start, max, completeLoop), points, segmentOptions);
+}
+
+/**
+ * @param {Segment[]} segments
+ * @param {PointElement[]} points
+ * @param {object} [segmentOptions]
+ * @return {Segment[]}
+ */
+function splitByStyles(line, segments, points, segmentOptions) {
+  if (!segmentOptions || !segmentOptions.setContext || !points) {
+    return segments;
+  }
+  return doSplitByStyles(line, segments, points, segmentOptions);
+}
+
+/**
+ * @param {LineElement} line
+ * @param {Segment[]} segments
+ * @param {PointElement[]} points
+ * @param {object} [segmentOptions]
+ * @return {Segment[]}
+ */
+function doSplitByStyles(line, segments, points, segmentOptions) {
+  const chartContext = line._chart.getContext();
+  const baseStyle = readStyle(line.options);
+  const {_datasetIndex: datasetIndex, options: {spanGaps}} = line;
+  const count = points.length;
+  const result = [];
+  let prevStyle = baseStyle;
+  let start = segments[0].start;
+  let i = start;
+
+  function addStyle(s, e, l, st) {
+    const dir = spanGaps ? -1 : 1;
+    if (s === e) {
+      return;
+    }
+    // Style can not start/end on a skipped point, adjust indices accordingly
+    s += count;
+    while (points[s % count].skip) {
+      s -= dir;
+    }
+    while (points[e % count].skip) {
+      e += dir;
+    }
+    if (s % count !== e % count) {
+      result.push({start: s % count, end: e % count, loop: l, style: st});
+      prevStyle = st;
+      start = e % count;
+    }
+  }
+
+  for (const segment of segments) {
+    start = spanGaps ? start : segment.start;
+    let prev = points[start % count];
+    let style;
+    for (i = start + 1; i <= segment.end; i++) {
+      const pt = points[i % count];
+      style = readStyle(segmentOptions.setContext(createContext(chartContext, {
+        type: 'segment',
+        p0: prev,
+        p1: pt,
+        p0DataIndex: (i - 1) % count,
+        p1DataIndex: i % count,
+        datasetIndex
+      })));
+      if (styleChanged(style, prevStyle)) {
+        addStyle(start, i - 1, segment.loop, prevStyle);
+      }
+      prev = pt;
+      prevStyle = style;
+    }
+    if (start < i - 1) {
+      addStyle(start, i - 1, segment.loop, prevStyle);
+    }
+  }
+
+  return result;
+}
+
+function readStyle(options) {
+  return {
+    backgroundColor: options.backgroundColor,
+    borderCapStyle: options.borderCapStyle,
+    borderDash: options.borderDash,
+    borderDashOffset: options.borderDashOffset,
+    borderJoinStyle: options.borderJoinStyle,
+    borderWidth: options.borderWidth,
+    borderColor: options.borderColor
+  };
+}
+
+function styleChanged(style, prevStyle) {
+  if (!prevStyle) {
+    return false;
+  }
+  const cache = [];
+  const replacer = function(key, value) {
+    if (!isPatternOrGradient(value)) {
+      return value;
+    }
+    if (!cache.includes(value)) {
+      cache.push(value);
+    }
+    return cache.indexOf(value);
+  };
+  return JSON.stringify(style, replacer) !== JSON.stringify(prevStyle, replacer);
 }

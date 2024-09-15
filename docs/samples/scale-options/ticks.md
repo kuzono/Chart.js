@@ -76,7 +76,7 @@ const config = {
         ticks: {
           // For a category axis, the val is the index so the lookup via getLabelForValue is needed
           callback: function(val, index) {
-            // Hide the label of every 2nd dataset
+            // Hide every 2nd tick label
             return index % 2 === 0 ? this.getLabelForValue(val) : '';
           },
           color: 'red',
@@ -92,3 +92,12 @@ module.exports = {
   config: config,
 };
 ```
+
+## Docs
+* [Line](../../charts/line.md)
+* [Options](../../general/options.md)
+  * [Scriptable Options](../../general/options.md#scriptable-options)
+    * [Tick Context](../../general/options.md#tick)
+* [Data structures (`labels`)](../../general/data-structures.md)
+* [Axes Styling](../../axes/styling.md)
+  * [Tick Configuration](../../axes/styling.md#tick-configuration)

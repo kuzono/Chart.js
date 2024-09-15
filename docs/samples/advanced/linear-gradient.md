@@ -19,7 +19,7 @@ const actions = [
       if (data.datasets.length > 0) {
         data.labels = Utils.months({count: data.labels.length + 1});
 
-        for (var index = 0; index < data.datasets.length; ++index) {
+        for (let index = 0; index < data.datasets.length; ++index) {
           data.datasets[index].data.push(Utils.rand(-100, 100));
         }
 
@@ -47,7 +47,7 @@ let width, height, gradient;
 function getGradient(ctx, chartArea) {
   const chartWidth = chartArea.right - chartArea.left;
   const chartHeight = chartArea.bottom - chartArea.top;
-  if (gradient === null || width !== chartWidth || height !== chartHeight) {
+  if (!gradient || width !== chartWidth || height !== chartHeight) {
     // Create the gradient because this is either the first render
     // or the size of the chart has changed
     width = chartWidth;
@@ -79,7 +79,7 @@ const data = {
 
         if (!chartArea) {
           // This case happens on initial chart load
-          return null;
+          return;
         }
         return getGradient(ctx, chartArea);
       },
@@ -108,3 +108,11 @@ module.exports = {
   config: config,
 };
 ```
+
+## Docs
+* [Colors](../../general/colors.md)
+  * [Patterns and Gradients](../../general/colors.md#patterns-and-gradients)  
+* [Data structures (`labels`)](../../general/data-structures.md)
+* [Options](../../general/options.md)
+  * [Scriptable Options](../../general/options.md#scriptable-options)
+* [Line](../../charts/line.md)

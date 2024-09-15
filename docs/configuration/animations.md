@@ -123,7 +123,7 @@ These keys can be configured in following paths:
 * `datasets[type]` - dataset type options
 * `overrides[type]` - chart type options
 
-These paths are valid under `defaults` for global confuguration and `options` for instance configuration.
+These paths are valid under `defaults` for global configuration and `options` for instance configuration.
 
 ## animation
 
@@ -183,7 +183,7 @@ Namespace: `options.transitions[mode]`
 | `'active'` | animation.duration | 400 | Override default duration to 400ms for hover animations
 | `'resize'` | animation.duration | 0 | Override default duration to 0ms (= no animation) for resize
 | `'show'` | animations.colors | `{ type: 'color', properties: ['borderColor', 'backgroundColor'], from: 'transparent' }` | Colors are faded in from transparent when dataset is shown using legend / [api](../developers/api.md#showdatasetIndex).
-| `'show'` | animations.visible | `{ type: 'boolean', duration: 0 }` | Dataset visiblity is immediately changed to true so the color transition from transparent is visible.
+| `'show'` | animations.visible | `{ type: 'boolean', duration: 0 }` | Dataset visibility is immediately changed to true so the color transition from transparent is visible.
 | `'hide'` | animations.colors | `{ type: 'color', properties: ['borderColor', 'backgroundColor'], to: 'transparent' }` | Colors are faded to transparent when dataset id hidden using legend / [api](../developers/api.md#hidedatasetIndex).
 | `'hide'` | animations.visible | `{ type: 'boolean', easing: 'easeInExpo' }` | Visibility is changed to false at a very late phase of animation
 
@@ -252,21 +252,24 @@ The callback is passed the following object:
 
 ```javascript
 {
-    // Chart object
-    chart: Chart,
+  // Chart object
+  chart: Chart,
 
-    // Number of animations still in progress
-    currentStep: number,
+  // Number of animations still in progress
+  currentStep: number,
 
-    // Total number of animations at the start of current animation
-    numSteps: number,
+  // `true` for the initial animation of the chart
+  initial: boolean,
+
+  // Total number of animations at the start of current animation
+  numSteps: number,
 }
 ```
 
 The following example fills a progress bar during the chart animation.
 
 ```javascript
-var chart = new Chart(ctx, {
+const chart = new Chart(ctx, {
     type: 'line',
     data: data,
     options: {
@@ -279,4 +282,4 @@ var chart = new Chart(ctx, {
 });
 ```
 
-Another example usage of these callbacks can be found on [Github](https://github.com/chartjs/Chart.js/blob/master/samples/advanced/progress-bar.html): this sample displays a progress bar showing how far along the animation is.
+Another example usage of these callbacks can be found [in this progress bar sample,](../samples/advanced/progress-bar.md) which displays a progress bar showing how far along the animation is.

@@ -41,7 +41,7 @@ function getLineColor(ctx) {
 }
 
 function alternatePointStyles(ctx) {
-  var index = ctx.dataIndex;
+  const index = ctx.dataIndex;
   return index % 2 === 0 ? 'circle' : 'rect';
 }
 
@@ -54,7 +54,7 @@ function make20PercentOpaque(ctx) {
 }
 
 function adjustRadiusBasedOnData(ctx) {
-  var v = ctx.parsed.y;
+  const v = ctx.parsed.y;
   return v < 10 ? 5
     : v < 25 ? 7
     : v < 50 ? 9
@@ -92,3 +92,8 @@ module.exports = {
   config,
 };
 ```
+
+## Docs
+* [Options](../../general/options.md)
+  * [Scriptable Options](../../general/options.md#scriptable-options)
+* [Radar](../../charts/radar.md)

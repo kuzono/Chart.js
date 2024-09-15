@@ -19,7 +19,7 @@ const actions = [
       if (data.datasets.length > 0) {
         data.labels.push('data #' + (data.labels.length + 1));
 
-        for (var index = 0; index < data.datasets.length; ++index) {
+        for (let index = 0; index < data.datasets.length; ++index) {
           data.datasets[index].data.push(Utils.rand(0, 100));
         }
 
@@ -89,3 +89,7 @@ module.exports = {
   config: config,
 };
 ```
+
+## Docs
+* [Polar Area Chart](../../charts/polar.md)
+* [Radial linear scale](../../axes/radial/linear.md)

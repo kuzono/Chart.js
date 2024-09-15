@@ -41,7 +41,7 @@ function getLineColor(ctx) {
 }
 
 function alternatePointStyles(ctx) {
-  var index = ctx.dataIndex;
+  const index = ctx.dataIndex;
   return index % 2 === 0 ? 'circle' : 'rect';
 }
 
@@ -50,7 +50,7 @@ function makeHalfAsOpaque(ctx) {
 }
 
 function adjustRadiusBasedOnData(ctx) {
-  var v = ctx.parsed.y;
+  const v = ctx.parsed.y;
   return v < 10 ? 5
     : v < 25 ? 7
     : v < 50 ? 9
@@ -89,3 +89,11 @@ module.exports = {
   config,
 };
 ```
+
+## Docs
+* [Line](../../charts/line.md)
+  * [Point Styling](../../charts/line.md#point-styling)
+* [Options](../../general/options.md)
+  * [Scriptable Options](../../general/options.md#scriptable-options)
+* [Data structures (`labels`)](../../general/data-structures.md)
+

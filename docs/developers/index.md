@@ -4,7 +4,7 @@ Developer features allow extending and enhancing Chart.js in many different ways
 
 ## Latest resources
 
-Latest documentation and samples, including unreleased features, are available at:
+The latest documentation and samples, including unreleased features, are available at:
 
 - <https://www.chartjs.org/docs/master/>
 - <https://www.chartjs.org/samples/master/>
@@ -16,16 +16,20 @@ Latest builds are available for testing at:
 - <https://www.chartjs.org/dist/master/chart.js>
 - <https://www.chartjs.org/dist/master/chart.min.js>
 
-**WARNING: Development builds MUST not be used for production purposes or as replacement for CDN.**
+:::warning Warning
+
+Development builds **must not** be used for production purposes or as replacement for a CDN. See [available CDNs](../getting-started/installation.md#cdn).
+
+:::
 
 ## Browser support
 
 All modern and up-to-date browsers are supported, including, but not limited to:
 
-Chrome
-Edge
-Firefox
-Safari
+* Chrome
+* Edge
+* Firefox
+* Safari
 
 As of version 3, we have dropped Internet Explorer 11 support.
 
@@ -43,7 +47,7 @@ Version 3 has a largely different API than earlier versions.
 
 Most earlier version options have current equivalents or are the same.
 
-Please note - documentation for previous versions are available online or in the GitHub repo.
+Please note - documentation for previous versions is available online or in the GitHub repo.
 
-- [2.9.3 Documentation](https://www.chartjs.org/docs/2.9.3/)
+- [2.9.4 Documentation](https://www.chartjs.org/docs/2.9.4/)
 - [1.x Documentation](https://github.com/chartjs/Chart.js/tree/v1.1.1/docs)

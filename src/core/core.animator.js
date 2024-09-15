@@ -1,8 +1,8 @@
-import {requestAnimFrame} from '../helpers/helpers.extras';
+import {requestAnimFrame} from '../helpers/helpers.extras.js';
 
 /**
- * @typedef { import("./core.animation").default } Animation
- * @typedef { import("./core.controller").default } Chart
+ * @typedef { import('./core.animation.js').default } Animation
+ * @typedef { import('./core.controller.js').default } Chart
  */
 
 /**
@@ -26,6 +26,7 @@ export class Animator {
 
     callbacks.forEach(fn => fn({
       chart,
+      initial: anims.initial,
       numSteps,
       currentStep: Math.min(date - anims.start, numSteps)
     }));
@@ -35,19 +36,17 @@ export class Animator {
 	 * @private
 	 */
   _refresh() {
-    const me = this;
-
-    if (me._request) {
+    if (this._request) {
       return;
     }
-    me._running = true;
+    this._running = true;
 
-    me._request = requestAnimFrame.call(window, () => {
-      me._update();
-      me._request = null;
+    this._request = requestAnimFrame.call(window, () => {
+      this._update();
+      this._request = null;
 
-      if (me._running) {
-        me._refresh();
+      if (this._running) {
+        this._refresh();
       }
     });
   }
@@ -56,10 +55,9 @@ export class Animator {
 	 * @private
 	 */
   _update(date = Date.now()) {
-    const me = this;
     let remaining = 0;
 
-    me._charts.forEach((anims, chart) => {
+    this._charts.forEach((anims, chart) => {
       if (!anims.running || !anims.items.length) {
         return;
       }
@@ -89,21 +87,22 @@ export class Animator {
 
       if (draw) {
         chart.draw();
-        me._notify(chart, anims, date, 'progress');
+        this._notify(chart, anims, date, 'progress');
       }
 
       if (!items.length) {
         anims.running = false;
-        me._notify(chart, anims, date, 'complete');
+        this._notify(chart, anims, date, 'complete');
+        anims.initial = false;
       }
 
       remaining += items.length;
     });
 
-    me._lastDate = date;
+    this._lastDate = date;
 
     if (remaining === 0) {
-      me._running = false;
+      this._running = false;
     }
   }
 
@@ -116,6 +115,7 @@ export class Animator {
     if (!anims) {
       anims = {
         running: false,
+        initial: true,
         items: [],
         listeners: {
           complete: [],
@@ -211,4 +211,4 @@ export class Animator {
 }
 
 // singleton instance
-export default new Animator();
+export default /* #__PURE__ */ new Animator();

@@ -32,7 +32,7 @@ Options are resolved from top to bottom, using a context dependent route.
 
 ### Dataset element level options
 
-Each scope is looked up with `elementType` prefix in the option name first, then wihtout the prefix. For example, `radius` for `point` element is looked up using `pointRadius` and if that does not hit, then `radius`.
+Each scope is looked up with `elementType` prefix in the option name first, then without the prefix. For example, `radius` for `point` element is looked up using `pointRadius` and if that does not hit, then `radius`.
 
 * dataset
 * options.datasets[`dataset.type`]
@@ -78,14 +78,14 @@ Example:
 
 ```javascript
 color: function(context) {
-    var index = context.dataIndex;
-    var value = context.dataset.data[index];
+    const index = context.dataIndex;
+    const value = context.dataset.data[index];
     return value < 0 ? 'red' :  // draw negative values in red
         index % 2 ? 'blue' :    // else, alternate values in blue and green
         'green';
 },
 borderColor: function(context, options) {
-    var color = options.color; // resolve the value of another scriptable option: 'red', 'blue' or 'green'
+    const color = options.color; // resolve the value of another scriptable option: 'red', 'blue' or 'green'
     return Chart.helpers.color(color).lighten(0.2);
 }
 ```
@@ -118,6 +118,7 @@ There are multiple levels of context objects:
     * `data`
   * `scale`
     * `tick`
+    * `pointLabel` (only used in the radial linear scale)
   * `tooltip`
 
 Each level inherits its parent(s) and any contextual information stored in the parent is available through the child.
@@ -133,7 +134,7 @@ The context object contains the following properties:
 
 In addition to [chart](#chart)
 
-* `active`: true if element is active (hovered)
+* `active`: true if an element is active (hovered)
 * `dataset`: dataset at index `datasetIndex`
 * `datasetIndex`: index of the current dataset
 * `index`: same as `datasetIndex`
@@ -144,7 +145,7 @@ In addition to [chart](#chart)
 
 In addition to [dataset](#dataset)
 
-* `active`: true if element is active (hovered)
+* `active`: true if an element is active (hovered)
 * `dataIndex`: index of the current data
 * `parsed`: the parsed data values for the given `dataIndex` and `datasetIndex`
 * `raw`: the raw data values for the given `dataIndex` and `datasetIndex`
@@ -166,6 +167,14 @@ In addition to [scale](#scale)
 * `tick`: the associated tick object
 * `index`: tick index
 * `type`: `'tick'`
+
+### pointLabel
+
+In addition to [scale](#scale)
+
+* `label`: the associated label value
+* `index`: label index
+* `type`: `'pointLabel'`
 
 ### tooltip
 

@@ -1,10 +1,10 @@
-import defaults from '../core/core.defaults';
-import {_longestText, renderText} from '../helpers/helpers.canvas';
-import {HALF_PI, isNumber, TAU, toDegrees, toRadians, _normalizeAngle} from '../helpers/helpers.math';
-import LinearScaleBase from './scale.linearbase';
-import Ticks from '../core/core.ticks';
-import {valueOrDefault, isArray, isFinite, callback as callCallback, isNullOrUndef} from '../helpers/helpers.core';
-import {toFont, toPadding} from '../helpers/helpers.options';
+import defaults from '../core/core.defaults.js';
+import {_longestText, addRoundedRectPath, renderText, _isPointInArea} from '../helpers/helpers.canvas.js';
+import {HALF_PI, TAU, toDegrees, toRadians, _normalizeAngle, PI} from '../helpers/helpers.math.js';
+import LinearScaleBase from './scale.linearbase.js';
+import Ticks from '../core/core.ticks.js';
+import {valueOrDefault, isArray, isFinite, callback as callCallback, isNullOrUndef} from '../helpers/helpers.core.js';
+import {createContext, toFont, toPadding, toTRBLCorners} from '../helpers/helpers.options.js';
 
 function getTickBackdropHeight(opts) {
   const tickOpts = opts.ticks;
@@ -16,17 +16,11 @@ function getTickBackdropHeight(opts) {
   return 0;
 }
 
-function measureLabelSize(ctx, lineHeight, label) {
-  if (isArray(label)) {
-    return {
-      w: _longestText(ctx, ctx.font, label),
-      h: label.length * lineHeight
-    };
-  }
-
+function measureLabelSize(ctx, font, label) {
+  label = isArray(label) ? label : [label];
   return {
-    w: ctx.measureText(label).width,
-    h: lineHeight
+    w: _longestText(ctx, font.string, label),
+    h: label.length * font.lineHeight
   };
 }
 
@@ -82,101 +76,128 @@ function fitWithPointLabels(scale) {
 
   // Get maximum radius of the polygon. Either half the height (minus the text width) or half the width.
   // Use this to calculate the offset + change. - Make sure L/R protrusion is at least 0 to stop issues with centre points
-  const furthestLimits = {
-    l: 0,
-    r: scale.width,
-    t: 0,
-    b: scale.height - scale.paddingTop
+  const orig = {
+    l: scale.left + scale._padding.left,
+    r: scale.right - scale._padding.right,
+    t: scale.top + scale._padding.top,
+    b: scale.bottom - scale._padding.bottom
   };
-  const furthestAngles = {};
-  let i, textSize, pointPosition;
-
+  const limits = Object.assign({}, orig);
   const labelSizes = [];
   const padding = [];
+  const valueCount = scale._pointLabels.length;
+  const pointLabelOpts = scale.options.pointLabels;
+  const additionalAngle = pointLabelOpts.centerPointLabels ? PI / valueCount : 0;
 
-  const valueCount = scale.getLabels().length;
-  for (i = 0; i < valueCount; i++) {
-    const opts = scale.options.pointLabels.setContext(scale.getContext(i));
+  for (let i = 0; i < valueCount; i++) {
+    const opts = pointLabelOpts.setContext(scale.getPointLabelContext(i));
     padding[i] = opts.padding;
-    pointPosition = scale.getPointPosition(i, scale.drawingArea + padding[i]);
+    const pointPosition = scale.getPointPosition(i, scale.drawingArea + padding[i], additionalAngle);
     const plFont = toFont(opts.font);
-    scale.ctx.font = plFont.string;
-    textSize = measureLabelSize(scale.ctx, plFont.lineHeight, scale._pointLabels[i]);
+    const textSize = measureLabelSize(scale.ctx, plFont, scale._pointLabels[i]);
     labelSizes[i] = textSize;
 
-    // Add quarter circle to make degree 0 mean top of circle
-    const angleRadians = scale.getIndexAngle(i);
-    const angle = toDegrees(angleRadians);
+    const angleRadians = _normalizeAngle(scale.getIndexAngle(i) + additionalAngle);
+    const angle = Math.round(toDegrees(angleRadians));
     const hLimits = determineLimits(angle, pointPosition.x, textSize.w, 0, 180);
     const vLimits = determineLimits(angle, pointPosition.y, textSize.h, 90, 270);
-
-    if (hLimits.start < furthestLimits.l) {
-      furthestLimits.l = hLimits.start;
-      furthestAngles.l = angleRadians;
-    }
-
-    if (hLimits.end > furthestLimits.r) {
-      furthestLimits.r = hLimits.end;
-      furthestAngles.r = angleRadians;
-    }
-
-    if (vLimits.start < furthestLimits.t) {
-      furthestLimits.t = vLimits.start;
-      furthestAngles.t = angleRadians;
-    }
-
-    if (vLimits.end > furthestLimits.b) {
-      furthestLimits.b = vLimits.end;
-      furthestAngles.b = angleRadians;
-    }
+    updateLimits(limits, orig, angleRadians, hLimits, vLimits);
   }
 
-  scale._setReductions(scale.drawingArea, furthestLimits, furthestAngles);
-
-  scale._pointLabelItems = [];
+  scale.setCenterPoint(
+    orig.l - limits.l,
+    limits.r - orig.r,
+    orig.t - limits.t,
+    limits.b - orig.b
+  );
 
   // Now that text size is determined, compute the full positions
-  const opts = scale.options;
-  const tickBackdropHeight = getTickBackdropHeight(opts);
-  const outerDistance = scale.getDistanceFromCenterForValue(opts.ticks.reverse ? scale.min : scale.max);
+  scale._pointLabelItems = buildPointLabelItems(scale, labelSizes, padding);
+}
 
-  for (i = 0; i < valueCount; i++) {
-    // Extra pixels out for some label spacing
-    const extra = (i === 0 ? tickBackdropHeight / 2 : 0);
-    const pointLabelPosition = scale.getPointPosition(i, outerDistance + extra + padding[i]);
-
-    const angle = toDegrees(scale.getIndexAngle(i));
-    const size = labelSizes[i];
-    adjustPointPositionForLabelHeight(angle, size, pointLabelPosition);
-
-    const textAlign = getTextAlignForAngle(angle);
-    let left;
-
-    if (textAlign === 'left') {
-      left = pointLabelPosition.x;
-    } else if (textAlign === 'center') {
-      left = pointLabelPosition.x - (size.w / 2);
-    } else {
-      left = pointLabelPosition.x - size.w;
-    }
-
-    const right = left + size.w;
-
-    scale._pointLabelItems[i] = {
-      // Text position
-      x: pointLabelPosition.x,
-      y: pointLabelPosition.y,
-
-      // Text rendering data
-      textAlign,
-
-      // Bounding box
-      left,
-      top: pointLabelPosition.y,
-      right,
-      bottom: pointLabelPosition.y + size.h,
-    };
+function updateLimits(limits, orig, angle, hLimits, vLimits) {
+  const sin = Math.abs(Math.sin(angle));
+  const cos = Math.abs(Math.cos(angle));
+  let x = 0;
+  let y = 0;
+  if (hLimits.start < orig.l) {
+    x = (orig.l - hLimits.start) / sin;
+    limits.l = Math.min(limits.l, orig.l - x);
+  } else if (hLimits.end > orig.r) {
+    x = (hLimits.end - orig.r) / sin;
+    limits.r = Math.max(limits.r, orig.r + x);
   }
+  if (vLimits.start < orig.t) {
+    y = (orig.t - vLimits.start) / cos;
+    limits.t = Math.min(limits.t, orig.t - y);
+  } else if (vLimits.end > orig.b) {
+    y = (vLimits.end - orig.b) / cos;
+    limits.b = Math.max(limits.b, orig.b + y);
+  }
+}
+
+function createPointLabelItem(scale, index, itemOpts) {
+  const outerDistance = scale.drawingArea;
+  const {extra, additionalAngle, padding, size} = itemOpts;
+  const pointLabelPosition = scale.getPointPosition(index, outerDistance + extra + padding, additionalAngle);
+  const angle = Math.round(toDegrees(_normalizeAngle(pointLabelPosition.angle + HALF_PI)));
+  const y = yForAngle(pointLabelPosition.y, size.h, angle);
+  const textAlign = getTextAlignForAngle(angle);
+  const left = leftForTextAlign(pointLabelPosition.x, size.w, textAlign);
+  return {
+    // if to draw or overlapped
+    visible: true,
+
+    // Text position
+    x: pointLabelPosition.x,
+    y,
+
+    // Text rendering data
+    textAlign,
+
+    // Bounding box
+    left,
+    top: y,
+    right: left + size.w,
+    bottom: y + size.h
+  };
+}
+
+function isNotOverlapped(item, area) {
+  if (!area) {
+    return true;
+  }
+  const {left, top, right, bottom} = item;
+  const apexesInArea = _isPointInArea({x: left, y: top}, area) || _isPointInArea({x: left, y: bottom}, area) ||
+    _isPointInArea({x: right, y: top}, area) || _isPointInArea({x: right, y: bottom}, area);
+  return !apexesInArea;
+}
+
+function buildPointLabelItems(scale, labelSizes, padding) {
+  const items = [];
+  const valueCount = scale._pointLabels.length;
+  const opts = scale.options;
+  const {centerPointLabels, display} = opts.pointLabels;
+  const itemOpts = {
+    extra: getTickBackdropHeight(opts) / 2,
+    additionalAngle: centerPointLabels ? PI / valueCount : 0
+  };
+  let area;
+
+  for (let i = 0; i < valueCount; i++) {
+    itemOpts.padding = padding[i];
+    itemOpts.size = labelSizes[i];
+
+    const item = createPointLabelItem(scale, i, itemOpts);
+    items.push(item);
+    if (display === 'auto') {
+      item.visible = isNotOverlapped(item, area);
+      if (item.visible) {
+        area = item;
+      }
+    }
+  }
+  return items;
 }
 
 function getTextAlignForAngle(angle) {
@@ -189,11 +210,51 @@ function getTextAlignForAngle(angle) {
   return 'right';
 }
 
-function adjustPointPositionForLabelHeight(angle, textSize, position) {
+function leftForTextAlign(x, w, align) {
+  if (align === 'right') {
+    x -= w;
+  } else if (align === 'center') {
+    x -= (w / 2);
+  }
+  return x;
+}
+
+function yForAngle(y, h, angle) {
   if (angle === 90 || angle === 270) {
-    position.y -= (textSize.h / 2);
+    y -= (h / 2);
   } else if (angle > 270 || angle < 90) {
-    position.y -= textSize.h;
+    y -= h;
+  }
+  return y;
+}
+
+function drawPointLabelBox(ctx, opts, item) {
+  const {left, top, right, bottom} = item;
+  const {backdropColor} = opts;
+
+  if (!isNullOrUndef(backdropColor)) {
+    const borderRadius = toTRBLCorners(opts.borderRadius);
+    const padding = toPadding(opts.backdropPadding);
+    ctx.fillStyle = backdropColor;
+
+    const backdropLeft = left - padding.left;
+    const backdropTop = top - padding.top;
+    const backdropWidth = right - left + padding.width;
+    const backdropHeight = bottom - top + padding.height;
+
+    if (Object.values(borderRadius).some(v => v !== 0)) {
+      ctx.beginPath();
+      addRoundedRectPath(ctx, {
+        x: backdropLeft,
+        y: backdropTop,
+        w: backdropWidth,
+        h: backdropHeight,
+        radius: borderRadius,
+      });
+      ctx.fill();
+    } else {
+      ctx.fillRect(backdropLeft, backdropTop, backdropWidth, backdropHeight);
+    }
   }
 }
 
@@ -201,16 +262,15 @@ function drawPointLabels(scale, labelCount) {
   const {ctx, options: {pointLabels}} = scale;
 
   for (let i = labelCount - 1; i >= 0; i--) {
-    const optsAtIndex = pointLabels.setContext(scale.getContext(i));
-    const plFont = toFont(optsAtIndex.font);
-    const {x, y, textAlign, left, top, right, bottom} = scale._pointLabelItems[i];
-    const {backdropColor} = optsAtIndex;
-
-    if (!isNullOrUndef(backdropColor)) {
-      const padding = toPadding(optsAtIndex.backdropPadding);
-      ctx.fillStyle = backdropColor;
-      ctx.fillRect(left - padding.left, top - padding.top, right - left + padding.width, bottom - top + padding.height);
+    const item = scale._pointLabelItems[i];
+    if (!item.visible) {
+      // overlapping
+      continue;
     }
+    const optsAtIndex = pointLabels.setContext(scale.getPointLabelContext(i));
+    drawPointLabelBox(ctx, optsAtIndex, item);
+    const plFont = toFont(optsAtIndex.font);
+    const {x, y, textAlign} = item;
 
     renderText(
       ctx,
@@ -244,7 +304,7 @@ function pathRadiusLine(scale, radius, circular, labelCount) {
   }
 }
 
-function drawRadiusLine(scale, gridLineOpts, radius, labelCount) {
+function drawRadiusLine(scale, gridLineOpts, radius, labelCount, borderOpts) {
   const ctx = scale.ctx;
   const circular = gridLineOpts.circular;
 
@@ -257,8 +317,8 @@ function drawRadiusLine(scale, gridLineOpts, radius, labelCount) {
   ctx.save();
   ctx.strokeStyle = color;
   ctx.lineWidth = lineWidth;
-  ctx.setLineDash(gridLineOpts.borderDash);
-  ctx.lineDashOffset = gridLineOpts.borderDashOffset;
+  ctx.setLineDash(borderOpts.dash);
+  ctx.lineDashOffset = borderOpts.dashOffset;
 
   ctx.beginPath();
   pathRadiusLine(scale, radius, circular, labelCount);
@@ -267,11 +327,87 @@ function drawRadiusLine(scale, gridLineOpts, radius, labelCount) {
   ctx.restore();
 }
 
-function numberOrZero(param) {
-  return isNumber(param) ? param : 0;
+function createPointLabelContext(parent, index, label) {
+  return createContext(parent, {
+    label,
+    index,
+    type: 'pointLabel'
+  });
 }
 
 export default class RadialLinearScale extends LinearScaleBase {
+
+  static id = 'radialLinear';
+
+  /**
+   * @type {any}
+   */
+  static defaults = {
+    display: true,
+
+    // Boolean - Whether to animate scaling the chart from the centre
+    animate: true,
+    position: 'chartArea',
+
+    angleLines: {
+      display: true,
+      lineWidth: 1,
+      borderDash: [],
+      borderDashOffset: 0.0
+    },
+
+    grid: {
+      circular: false
+    },
+
+    startAngle: 0,
+
+    // label settings
+    ticks: {
+      // Boolean - Show a backdrop to the scale label
+      showLabelBackdrop: true,
+
+      callback: Ticks.formatters.numeric
+    },
+
+    pointLabels: {
+      backdropColor: undefined,
+
+      // Number - The backdrop padding above & below the label in pixels
+      backdropPadding: 2,
+
+      // Boolean - if true, show point labels
+      display: true,
+
+      // Number - Point label font size in pixels
+      font: {
+        size: 10
+      },
+
+      // Function - Used to convert point labels
+      callback(label) {
+        return label;
+      },
+
+      // Number - Additionl padding between scale and pointLabel
+      padding: 5,
+
+      // Boolean - if true, center point labels to slices in polar chart
+      centerPointLabels: false
+    }
+  };
+
+  static defaultRoutes = {
+    'angleLines.color': 'borderColor',
+    'pointLabels.color': 'color',
+    'ticks.color': 'color'
+  };
+
+  static descriptors = {
+    angleLines: {
+      _fallback: 'grid'
+    }
+  };
 
   constructor(cfg) {
     super(cfg);
@@ -288,26 +424,23 @@ export default class RadialLinearScale extends LinearScaleBase {
   }
 
   setDimensions() {
-    const me = this;
-
     // Set the unconstrained dimension before label rotation
-    me.width = me.maxWidth;
-    me.height = me.maxHeight;
-    me.paddingTop = getTickBackdropHeight(me.options) / 2;
-    me.xCenter = Math.floor(me.width / 2);
-    me.yCenter = Math.floor((me.height - me.paddingTop) / 2);
-    me.drawingArea = Math.min(me.height - me.paddingTop, me.width) / 2;
+    const padding = this._padding = toPadding(getTickBackdropHeight(this.options) / 2);
+    const w = this.width = this.maxWidth - padding.width;
+    const h = this.height = this.maxHeight - padding.height;
+    this.xCenter = Math.floor(this.left + w / 2 + padding.left);
+    this.yCenter = Math.floor(this.top + h / 2 + padding.top);
+    this.drawingArea = Math.floor(Math.min(w, h) / 2);
   }
 
   determineDataLimits() {
-    const me = this;
-    const {min, max} = me.getMinMax(false);
+    const {min, max} = this.getMinMax(false);
 
-    me.min = isFinite(min) && !isNaN(min) ? min : 0;
-    me.max = isFinite(max) && !isNaN(max) ? max : 0;
+    this.min = isFinite(min) && !isNaN(min) ? min : 0;
+    this.max = isFinite(max) && !isNaN(max) ? max : 0;
 
     // Common base implementation to handle min, max, beginAtZero
-    me.handleTickRangeOptions();
+    this.handleTickRangeOptions();
   }
 
   /**
@@ -319,80 +452,51 @@ export default class RadialLinearScale extends LinearScaleBase {
   }
 
   generateTickLabels(ticks) {
-    const me = this;
-
-    LinearScaleBase.prototype.generateTickLabels.call(me, ticks);
+    LinearScaleBase.prototype.generateTickLabels.call(this, ticks);
 
     // Point labels
-    me._pointLabels = me.getLabels().map((value, index) => {
-      const label = callCallback(me.options.pointLabels.callback, [value, index], me);
-      return label || label === 0 ? label : '';
-    });
+    this._pointLabels = this.getLabels()
+      .map((value, index) => {
+        const label = callCallback(this.options.pointLabels.callback, [value, index], this);
+        return label || label === 0 ? label : '';
+      })
+      .filter((v, i) => this.chart.getDataVisibility(i));
   }
 
   fit() {
-    const me = this;
-    const opts = me.options;
+    const opts = this.options;
 
     if (opts.display && opts.pointLabels.display) {
-      fitWithPointLabels(me);
+      fitWithPointLabels(this);
     } else {
-      me.setCenterPoint(0, 0, 0, 0);
+      this.setCenterPoint(0, 0, 0, 0);
     }
   }
 
-  /**
-	 * Set radius reductions and determine new radius and center point
-	 * @private
-	 */
-  _setReductions(largestPossibleRadius, furthestLimits, furthestAngles) {
-    const me = this;
-    let radiusReductionLeft = furthestLimits.l / Math.sin(furthestAngles.l);
-    let radiusReductionRight = Math.max(furthestLimits.r - me.width, 0) / Math.sin(furthestAngles.r);
-    let radiusReductionTop = -furthestLimits.t / Math.cos(furthestAngles.t);
-    let radiusReductionBottom = -Math.max(furthestLimits.b - (me.height - me.paddingTop), 0) / Math.cos(furthestAngles.b);
-
-    radiusReductionLeft = numberOrZero(radiusReductionLeft);
-    radiusReductionRight = numberOrZero(radiusReductionRight);
-    radiusReductionTop = numberOrZero(radiusReductionTop);
-    radiusReductionBottom = numberOrZero(radiusReductionBottom);
-
-    me.drawingArea = Math.max(largestPossibleRadius / 2, Math.min(
-      Math.floor(largestPossibleRadius - (radiusReductionLeft + radiusReductionRight) / 2),
-      Math.floor(largestPossibleRadius - (radiusReductionTop + radiusReductionBottom) / 2)));
-    me.setCenterPoint(radiusReductionLeft, radiusReductionRight, radiusReductionTop, radiusReductionBottom);
-  }
-
   setCenterPoint(leftMovement, rightMovement, topMovement, bottomMovement) {
-    const me = this;
-    const maxRight = me.width - rightMovement - me.drawingArea;
-    const maxLeft = leftMovement + me.drawingArea;
-    const maxTop = topMovement + me.drawingArea;
-    const maxBottom = (me.height - me.paddingTop) - bottomMovement - me.drawingArea;
-
-    me.xCenter = Math.floor(((maxLeft + maxRight) / 2) + me.left);
-    me.yCenter = Math.floor(((maxTop + maxBottom) / 2) + me.top + me.paddingTop);
+    this.xCenter += Math.floor((leftMovement - rightMovement) / 2);
+    this.yCenter += Math.floor((topMovement - bottomMovement) / 2);
+    this.drawingArea -= Math.min(this.drawingArea / 2, Math.max(leftMovement, rightMovement, topMovement, bottomMovement));
   }
 
   getIndexAngle(index) {
-    const angleMultiplier = TAU / this.getLabels().length;
+    const angleMultiplier = TAU / (this._pointLabels.length || 1);
     const startAngle = this.options.startAngle || 0;
+
     return _normalizeAngle(index * angleMultiplier + toRadians(startAngle));
   }
 
   getDistanceFromCenterForValue(value) {
-    const me = this;
-
     if (isNullOrUndef(value)) {
       return NaN;
     }
 
     // Take into account half font size + the yPadding of the top value
-    const scalingFactor = me.drawingArea / (me.max - me.min);
-    if (me.options.reverse) {
-      return (me.max - value) * scalingFactor;
+    const scalingFactor = this.drawingArea / (this.max - this.min);
+    if (this.options.reverse) {
+      return (this.max - value) * scalingFactor;
     }
-    return (value - me.min) * scalingFactor;
+    return (value - this.min) * scalingFactor;
   }
 
   getValueForDistanceFromCenter(distance) {
@@ -400,17 +504,24 @@ export default class RadialLinearScale extends LinearScaleBase {
       return NaN;
     }
 
-    const me = this;
-    const scaledDistance = distance / (me.drawingArea / (me.max - me.min));
-    return me.options.reverse ? me.max - scaledDistance : me.min + scaledDistance;
+    const scaledDistance = distance / (this.drawingArea / (this.max - this.min));
+    return this.options.reverse ? this.max - scaledDistance : this.min + scaledDistance;
   }
 
-  getPointPosition(index, distanceFromCenter) {
-    const me = this;
-    const angle = me.getIndexAngle(index) - HALF_PI;
+  getPointLabelContext(index) {
+    const pointLabels = this._pointLabels || [];
+
+    if (index >= 0 && index < pointLabels.length) {
+      const pointLabel = pointLabels[index];
+      return createPointLabelContext(this.getContext(), index, pointLabel);
+    }
+  }
+
+  getPointPosition(index, distanceFromCenter, additionalAngle = 0) {
+    const angle = this.getIndexAngle(index) - HALF_PI + additionalAngle;
     return {
-      x: Math.cos(angle) * distanceFromCenter + me.xCenter,
-      y: Math.sin(angle) * distanceFromCenter + me.yCenter,
+      x: Math.cos(angle) * distanceFromCenter + this.xCenter,
+      y: Math.sin(angle) * distanceFromCenter + this.yCenter,
       angle
     };
   }
@@ -437,13 +548,12 @@ export default class RadialLinearScale extends LinearScaleBase {
 	 * @protected
 	 */
   drawBackground() {
-    const me = this;
-    const {backgroundColor, grid: {circular}} = me.options;
+    const {backgroundColor, grid: {circular}} = this.options;
     if (backgroundColor) {
-      const ctx = me.ctx;
+      const ctx = this.ctx;
       ctx.save();
       ctx.beginPath();
-      pathRadiusLine(me, me.getDistanceFromCenterForValue(me._endValue), circular, me.getLabels().length);
+      pathRadiusLine(this, this.getDistanceFromCenterForValue(this._endValue), circular, this._pointLabels.length);
       ctx.closePath();
       ctx.fillStyle = backgroundColor;
       ctx.fill();
@@ -455,24 +565,26 @@ export default class RadialLinearScale extends LinearScaleBase {
 	 * @protected
 	 */
   drawGrid() {
-    const me = this;
-    const ctx = me.ctx;
-    const opts = me.options;
-    const {angleLines, grid} = opts;
-    const labelCount = me.getLabels().length;
+    const ctx = this.ctx;
+    const opts = this.options;
+    const {angleLines, grid, border} = opts;
+    const labelCount = this._pointLabels.length;
 
     let i, offset, position;
 
     if (opts.pointLabels.display) {
-      drawPointLabels(me, labelCount);
+      drawPointLabels(this, labelCount);
     }
 
     if (grid.display) {
-      me.ticks.forEach((tick, index) => {
-        if (index !== 0) {
-          offset = me.getDistanceFromCenterForValue(tick.value);
-          const optsAtIndex = grid.setContext(me.getContext(index - 1));
-          drawRadiusLine(me, optsAtIndex, offset, labelCount);
+      this.ticks.forEach((tick, index) => {
+        if (index !== 0 || (index === 0 && this.min < 0)) {
+          offset = this.getDistanceFromCenterForValue(tick.value);
+          const context = this.getContext(index);
+          const optsAtIndex = grid.setContext(context);
+          const optsAtIndexBorder = border.setContext(context);
+
+          drawRadiusLine(this, optsAtIndex, offset, labelCount, optsAtIndexBorder);
         }
       });
     }
@@ -480,8 +592,8 @@ export default class RadialLinearScale extends LinearScaleBase {
     if (angleLines.display) {
       ctx.save();
 
-      for (i = me.getLabels().length - 1; i >= 0; i--) {
-        const optsAtIndex = angleLines.setContext(me.getContext(i));
+      for (i = labelCount - 1; i >= 0; i--) {
+        const optsAtIndex = angleLines.setContext(this.getPointLabelContext(i));
         const {color, lineWidth} = optsAtIndex;
 
         if (!lineWidth || !color) {
@@ -494,10 +606,10 @@ export default class RadialLinearScale extends LinearScaleBase {
         ctx.setLineDash(optsAtIndex.borderDash);
         ctx.lineDashOffset = optsAtIndex.borderDashOffset;
 
-        offset = me.getDistanceFromCenterForValue(opts.ticks.reverse ? me.min : me.max);
-        position = me.getPointPosition(i, offset);
+        offset = this.getDistanceFromCenterForValue(opts.reverse ? this.min : this.max);
+        position = this.getPointPosition(i, offset);
         ctx.beginPath();
-        ctx.moveTo(me.xCenter, me.yCenter);
+        ctx.moveTo(this.xCenter, this.yCenter);
         ctx.lineTo(position.x, position.y);
         ctx.stroke();
       }
@@ -509,35 +621,40 @@ export default class RadialLinearScale extends LinearScaleBase {
   /**
 	 * @protected
 	 */
+  drawBorder() {}
+
+  /**
+	 * @protected
+	 */
   drawLabels() {
-    const me = this;
-    const ctx = me.ctx;
-    const opts = me.options;
+    const ctx = this.ctx;
+    const opts = this.options;
     const tickOpts = opts.ticks;
 
     if (!tickOpts.display) {
       return;
     }
 
-    const startAngle = me.getIndexAngle(0);
+    const startAngle = this.getIndexAngle(0);
     let offset, width;
 
     ctx.save();
-    ctx.translate(me.xCenter, me.yCenter);
+    ctx.translate(this.xCenter, this.yCenter);
     ctx.rotate(startAngle);
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
 
-    me.ticks.forEach((tick, index) => {
-      if (index === 0 && !opts.reverse) {
+    this.ticks.forEach((tick, index) => {
+      if ((index === 0 && this.min >= 0) && !opts.reverse) {
         return;
       }
 
-      const optsAtIndex = tickOpts.setContext(me.getContext(index));
+      const optsAtIndex = tickOpts.setContext(this.getContext(index));
       const tickFont = toFont(optsAtIndex.font);
-      offset = me.getDistanceFromCenterForValue(me.ticks[index].value);
+      offset = this.getDistanceFromCenterForValue(this.ticks[index].value);
 
       if (optsAtIndex.showLabelBackdrop) {
+        ctx.font = tickFont.string;
         width = ctx.measureText(tick.label).width;
         ctx.fillStyle = optsAtIndex.backdropColor;
 
@@ -552,6 +669,8 @@ export default class RadialLinearScale extends LinearScaleBase {
 
       renderText(ctx, tick.label, 0, -offset, tickFont, {
         color: optsAtIndex.color,
+        strokeColor: optsAtIndex.textStrokeColor,
+        strokeWidth: optsAtIndex.textStrokeWidth,
       });
     });
 
@@ -563,78 +682,3 @@ export default class RadialLinearScale extends LinearScaleBase {
 	 */
   drawTitle() {}
 }
-
-RadialLinearScale.id = 'radialLinear';
-
-/**
- * @type {any}
- */
-RadialLinearScale.defaults = {
-  display: true,
-
-  // Boolean - Whether to animate scaling the chart from the centre
-  animate: true,
-  position: 'chartArea',
-
-  angleLines: {
-    display: true,
-    lineWidth: 1,
-    borderDash: [],
-    borderDashOffset: 0.0
-  },
-
-  grid: {
-    circular: false
-  },
-
-  startAngle: 0,
-
-  // label settings
-  ticks: {
-    // Boolean - Show a backdrop to the scale label
-    showLabelBackdrop: true,
-
-    // String - The colour of the label backdrop
-    backdropColor: 'rgba(255,255,255,0.75)',
-
-    // Number/Object - The backdrop padding of the label in pixels
-    backdropPadding: 2,
-
-    callback: Ticks.formatters.numeric
-  },
-
-  pointLabels: {
-    backdropColor: undefined,
-
-    // Number - The backdrop padding above & below the label in pixels
-    backdropPadding: 2,
-
-    // Boolean - if true, show point labels
-    display: true,
-
-    // Number - Point label font size in pixels
-    font: {
-      size: 10
-    },
-
-    // Function - Used to convert point labels
-    callback(label) {
-      return label;
-    },
-
-    // Number - Additionl padding between scale and pointLabel
-    padding: 5
-  }
-};
-
-RadialLinearScale.defaultRoutes = {
-  'angleLines.color': 'borderColor',
-  'pointLabels.color': 'color',
-  'ticks.color': 'color'
-};
-
-RadialLinearScale.descriptors = {
-  angleLines: {
-    _fallback: 'grid'
-  }
-};

@@ -1,6 +1,6 @@
-import defaults, {overrides, descriptors} from './core.defaults';
-import {mergeIf, resolveObjectKey, isArray, isFunction, valueOrDefault, isObject} from '../helpers/helpers.core';
-import {_attachContext, _createResolver, _descriptors} from '../helpers/helpers.config';
+import defaults, {overrides, descriptors} from './core.defaults.js';
+import {mergeIf, resolveObjectKey, isArray, isFunction, valueOrDefault, isObject} from '../helpers/helpers.core.js';
+import {_attachContext, _createResolver, _descriptors} from '../helpers/helpers.config.js';
 
 export function getIndexAxis(type, options) {
   const datasetDefaults = defaults.datasets[type] || {};
@@ -22,6 +22,12 @@ function getDefaultScaleIDFromAxis(axis, indexAxis) {
   return axis === indexAxis ? '_index_' : '_value_';
 }
 
+function idMatchesAxis(id) {
+  if (id === 'x' || id === 'y' || id === 'r') {
+    return id;
+  }
+}
+
 function axisFromPosition(position) {
   if (position === 'top' || position === 'bottom') {
     return 'x';
@@ -31,27 +37,55 @@ function axisFromPosition(position) {
   }
 }
 
-export function determineAxis(id, scaleOptions) {
-  if (id === 'x' || id === 'y') {
+export function determineAxis(id, ...scaleOptions) {
+  if (idMatchesAxis(id)) {
     return id;
   }
-  return scaleOptions.axis || axisFromPosition(scaleOptions.position) || id.charAt(0).toLowerCase();
+  for (const opts of scaleOptions) {
+    const axis = opts.axis
+      || axisFromPosition(opts.position)
+      || id.length > 1 && idMatchesAxis(id[0].toLowerCase());
+    if (axis) {
+      return axis;
+    }
+  }
+  throw new Error(`Cannot determine type of '${id}' axis. Please provide 'axis' or 'position' option.`);
+}
+
+function getAxisFromDataset(id, axis, dataset) {
+  if (dataset[axis + 'AxisID'] === id) {
+    return {axis};
+  }
+}
+
+function retrieveAxisFromDatasets(id, config) {
+  if (config.data && config.data.datasets) {
+    const boundDs = config.data.datasets.filter((d) => d.xAxisID === id || d.yAxisID === id);
+    if (boundDs.length) {
+      return getAxisFromDataset(id, 'x', boundDs[0]) || getAxisFromDataset(id, 'y', boundDs[0]);
+    }
+  }
+  return {};
 }
 
 function mergeScaleConfig(config, options) {
   const chartDefaults = overrides[config.type] || {scales: {}};
   const configScales = options.scales || {};
   const chartIndexAxis = getIndexAxis(config.type, options);
-  const firstIDs = Object.create(null);
   const scales = Object.create(null);
 
   // First figure out first scale id's per axis.
   Object.keys(configScales).forEach(id => {
     const scaleConf = configScales[id];
-    const axis = determineAxis(id, scaleConf);
+    if (!isObject(scaleConf)) {
+      return console.error(`Invalid scale configuration for scale: ${id}`);
+    }
+    if (scaleConf._proxy) {
+      return console.warn(`Ignoring resolver passed as options for scale: ${id}`);
+    }
+    const axis = determineAxis(id, scaleConf, retrieveAxisFromDatasets(id, config), defaults.scales[scaleConf.type]);
     const defaultId = getDefaultScaleIDFromAxis(axis, chartIndexAxis);
     const defaultScaleOptions = chartDefaults.scales || {};
-    firstIDs[axis] = firstIDs[axis] || id;
     scales[id] = mergeIf(Object.create(null), [{axis}, scaleConf, defaultScaleOptions[axis], defaultScaleOptions[defaultId]]);
   });
 
@@ -63,7 +97,7 @@ function mergeScaleConfig(config, options) {
     const defaultScaleOptions = datasetDefaults.scales || {};
     Object.keys(defaultScaleOptions).forEach(defaultID => {
       const axis = getAxisFromDefaultScaleID(defaultID, indexAxis);
-      const id = dataset[axis + 'AxisID'] || firstIDs[axis] || axis;
+      const id = dataset[axis + 'AxisID'] || axis;
       scales[id] = scales[id] || Object.create(null);
       mergeIf(scales[id], [{axis}, configScales[id], defaultScaleOptions[defaultID]]);
     });
@@ -85,12 +119,16 @@ function initOptions(config) {
   options.scales = mergeScaleConfig(config, options);
 }
 
-function initConfig(config) {
-  config = config || {};
-
-  const data = config.data = config.data || {datasets: [], labels: []};
+function initData(data) {
+  data = data || {};
   data.datasets = data.datasets || [];
   data.labels = data.labels || [];
+  return data;
+}
+
+function initConfig(config) {
+  config = config || {};
+  config.data = initData(config.data);
 
   initOptions(config);
 
@@ -124,6 +162,10 @@ export default class Config {
     this._resolverCache = new Map();
   }
 
+  get platform() {
+    return this._config.platform;
+  }
+
   get type() {
     return this._config.type;
   }
@@ -137,7 +179,7 @@ export default class Config {
   }
 
   set data(data) {
-    this._config.data = data;
+    this._config.data = initData(data);
   }
 
   get options() {
@@ -272,7 +314,10 @@ export default class Config {
       keys.forEach(key => addIfFound(scopes, descriptors, key));
     });
 
-    const array = [...scopes];
+    const array = Array.from(scopes);
+    if (array.length === 0) {
+      array.push(Object.create(null));
+    }
     if (keysCached.has(keyLists)) {
       cache.set(keyLists, array);
     }
@@ -354,12 +399,18 @@ function getResolver(resolverCache, scopes, prefixes) {
   return cached;
 }
 
+const hasFunction = value => isObject(value)
+  && Object.getOwnPropertyNames(value).some((key) => isFunction(value[key]));
+
 function needContext(proxy, names) {
   const {isScriptable, isIndexable} = _descriptors(proxy);
 
   for (const prop of names) {
-    if ((isScriptable(prop) && isFunction(proxy[prop]))
-      || (isIndexable(prop) && isArray(proxy[prop]))) {
+    const scriptable = isScriptable(prop);
+    const indexable = isIndexable(prop);
+    const value = (indexable || scriptable) && proxy[prop];
+    if ((scriptable && (isFunction(value) || hasFunction(value)))
+      || (indexable && isArray(value))) {
       return true;
     }
   }

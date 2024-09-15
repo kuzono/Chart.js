@@ -59,6 +59,32 @@ describe('Chart.controllers.line', function() {
     expect(createChart).not.toThrow();
   });
 
+  it('should find min and max for stacked chart', function() {
+    var chart = window.acquireChart({
+      type: 'line',
+      data: {
+        datasets: [{
+          data: [10, 11, 12, 13]
+        }, {
+          data: [1, 2, 3, 4]
+        }],
+        labels: ['a', 'b', 'c', 'd']
+      },
+      options: {
+        scales: {
+          y: {
+            stacked: true
+          }
+        }
+      }
+    });
+    expect(chart.getDatasetMeta(0).controller.getMinMax(chart.scales.y, true)).toEqual({min: 10, max: 13});
+    expect(chart.getDatasetMeta(1).controller.getMinMax(chart.scales.y, true)).toEqual({min: 11, max: 17});
+    chart.hide(0);
+    expect(chart.getDatasetMeta(0).controller.getMinMax(chart.scales.y, true)).toEqual({min: 10, max: 13});
+    expect(chart.getDatasetMeta(1).controller.getMinMax(chart.scales.y, true)).toEqual({min: 1, max: 4});
+  });
+
   it('Should create line elements and point elements for each data item during initialization', function() {
     var chart = window.acquireChart({
       type: 'line',
@@ -577,7 +603,7 @@ describe('Chart.controllers.line', function() {
       expect(options.cubicInterpolationMode).toBe('monotone');
     });
 
-    it('should be overriden by user-supplied values', function() {
+    it('should be overridden by user-supplied values', function() {
       Chart.helpers.merge(Chart.defaults.datasets.line, {
         spanGaps: true,
         tension: 0.231
@@ -916,5 +942,178 @@ describe('Chart.controllers.line', function() {
       });
     }
     expect(createChart).not.toThrow();
+  });
+
+  it('should set skipped points to the reset state', function() {
+    var chart = window.acquireChart({
+      type: 'line',
+      data: {
+        datasets: [{
+          data: [10, null, 0, -4],
+          label: 'dataset1',
+          pointBorderWidth: [1, 2, 3, 4]
+        }],
+        labels: ['label1', 'label2', 'label3', 'label4']
+      }
+    });
+
+    var meta = chart.getDatasetMeta(0);
+    var point = meta.data[1];
+    var {x, y} = point.getProps(['x', 'y'], true);
+    expect(point.skip).toBe(true);
+    expect(isNaN(x)).toBe(false);
+    expect(isNaN(y)).toBe(false);
+  });
+
+  it('should honor spangap interval forwards', function() {
+    var chart = window.acquireChart({
+      type: 'line',
+      data: {
+        datasets: [{
+          spanGaps: 10,
+          data: [{x: 10, y: 123}, {x: 15, y: 124}, {x: 26, y: 125}, {x: 30, y: 126}, {x: 35, y: 127}],
+          label: 'dataset1',
+        }],
+      },
+      options: {
+        scales: {
+          x: {
+            type: 'linear',
+          }
+        }
+      }
+    });
+
+    var meta = chart.getDatasetMeta(0);
+    for (var i = 0; i < meta.data.length; ++i) {
+      var point = meta.data[i];
+      expect(point.stop).toBe(i === 2);
+    }
+  });
+
+  it('should honor spangap interval backwards', function() {
+    var chart = window.acquireChart({
+      type: 'line',
+      data: {
+        datasets: [{
+          spanGaps: 10,
+          data: [{x: 35, y: 123}, {x: 30, y: 124}, {x: 26, y: 125}, {x: 15, y: 126}, {x: 10, y: 127}],
+          label: 'dataset1',
+        }],
+      },
+      options: {
+        scales: {
+          x: {
+            type: 'linear',
+          }
+        }
+      }
+    });
+
+    var meta = chart.getDatasetMeta(0);
+    for (var i = 0; i < meta.data.length; ++i) {
+      var point = meta.data[i];
+      expect(point.stop).toBe(i === 3);
+    }
+  });
+
+  it('should correctly calc visible points on update', async() => {
+    var chart = window.acquireChart({
+      type: 'line',
+      data: {
+        datasets: [{
+          data: [
+            {x: 10, y: 20},
+            {x: 15, y: 19},
+          ]
+        }],
+      },
+      options: {
+        scales: {
+          y: {
+            type: 'linear',
+            min: 0,
+            max: 25,
+          },
+          x: {
+            type: 'linear',
+            min: 0,
+            max: 50
+          },
+        }
+      }
+    });
+
+    chart.data.datasets[0].data = [
+      {x: 10, y: 20},
+      {x: 15, y: 19},
+      {x: 17, y: 12},
+      {x: 50, y: 9},
+      {x: 50, y: 9},
+      {x: 50, y: 9},
+      {x: 51, y: 9},
+      {x: 52, y: 9},
+      {x: 52, y: 9},
+    ];
+    chart.update();
+
+    var point = chart.getDatasetMeta(0).data[0];
+    var event = {
+      type: 'mousemove',
+      native: true,
+      ...point
+    };
+
+    chart._handleEvent(event, false, true);
+
+    const visiblePoints = chart.getSortedVisibleDatasetMetas()[0].data.filter(_ => !_.skip);
+
+    expect(visiblePoints.length).toBe(6);
+  }, 500);
+
+  it('should not override tooltip title and label callbacks', async() => {
+    const chart = window.acquireChart({
+      type: 'line',
+      data: {
+        labels: ['Label 1', 'Label 2'],
+        datasets: [{
+          data: [21, 79],
+          label: 'Dataset 1'
+        }, {
+          data: [33, 67],
+          label: 'Dataset 2'
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: true,
+      }
+    });
+    const {tooltip} = chart;
+    const point = chart.getDatasetMeta(0).data[0];
+
+    await jasmine.triggerMouseEvent(chart, 'mousemove', point);
+
+    expect(tooltip.title).toEqual(['Label 1']);
+    expect(tooltip.body).toEqual([{
+      before: [],
+      lines: ['Dataset 1: 21'],
+      after: []
+    }]);
+
+    chart.options.plugins.tooltip = {mode: 'dataset'};
+    chart.update();
+    await jasmine.triggerMouseEvent(chart, 'mousemove', point);
+
+    expect(tooltip.title).toEqual(['Dataset 1']);
+    expect(tooltip.body).toEqual([{
+      before: [],
+      lines: ['Label 1: 21'],
+      after: []
+    }, {
+      before: [],
+      lines: ['Label 2: 79'],
+      after: []
+    }]);
   });
 });

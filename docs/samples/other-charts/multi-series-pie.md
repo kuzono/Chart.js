@@ -44,7 +44,7 @@ const config = {
             const labelsOriginal = original.call(this, chart);
 
             // Build an array of colors used in the datasets of the chart
-            var datasetColors = chart.data.datasets.map(function(e) {
+            let datasetColors = chart.data.datasets.map(function(e) {
               return e.backgroundColor;
             });
             datasetColors = datasetColors.flat();
@@ -89,3 +89,8 @@ module.exports = {
   config: config,
 };
 ```
+
+## Docs
+* [Doughnut and Pie Charts](../../charts/doughnut.md)
+* [Options](../../general/options.md)
+  * [Scriptable Options](../../general/options.md#scriptable-options)

@@ -22,6 +22,7 @@ categories:
   - title: 'Development'
     labels:
       - 'type: chore'
+      - 'dependencies'
 exclude-labels:
   - 'type: infrastructure'
 change-template: '- #$NUMBER $TITLE'
@@ -43,10 +44,10 @@ template: |
   # Essential Links
 
   * [npm](https://www.npmjs.com/package/chart.js)
-  * [Migration guide](https://www.chartjs.org/docs/next/getting-started/v3-migration)
-  * [Docs](https://www.chartjs.org/docs/next/)
-  * [API](https://www.chartjs.org/docs/next/api/)
-  * [Samples](https://www.chartjs.org/docs/next/samples/)
+  * [Migration guide](https://www.chartjs.org/docs/$RESOLVED_VERSION/migration/v4-migration.html)
+  * [Docs](https://www.chartjs.org/docs/$RESOLVED_VERSION/)
+  * [API](https://www.chartjs.org/docs/$RESOLVED_VERSION/api/)
+  * [Samples](https://www.chartjs.org/docs/$RESOLVED_VERSION/samples/)
 
   $CHANGES
 

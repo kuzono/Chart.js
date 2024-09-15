@@ -26,7 +26,7 @@ Chart.register(MyScale);
 To use the new scale, simply pass in the string key to the config when creating a chart.
 
 ```javascript
-var lineChart = new Chart(ctx, {
+const lineChart = new Chart(ctx, {
     data: data,
     type: 'line',
     options: {
@@ -90,9 +90,8 @@ To work with Chart.js, custom scale types must implement the following interface
 
     // Get the pixel (x coordinate for horizontal axis, y coordinate for vertical axis) for a given value
     // @param value : the value to get the pixel for
-    // @param index : index into the data array of the value
-    // @param datasetIndex : index of the dataset the value comes from
-    getPixelForValue: function(value, index, datasetIndex) {},
+    // @param [index] : index into the data array of the value
+    getPixelForValue: function(value, index) {},
 
     // Get the value for a given pixel (x coordinate for horizontal axis, y coordinate for vertical axis)
     // @param pixel : pixel value

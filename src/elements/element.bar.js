@@ -1,6 +1,9 @@
-import Element from '../core/core.element';
-import {toTRBL, toTRBLCorners} from '../helpers/helpers.options';
-import {PI, HALF_PI} from '../helpers/helpers.math';
+import Element from '../core/core.element.js';
+import {isObject, _isBetween, _limitValue} from '../helpers/index.js';
+import {addRoundedRectPath} from '../helpers/helpers.canvas.js';
+import {toTRBL, toTRBLCorners} from '../helpers/helpers.options.js';
+
+/** @typedef {{ x: number, y: number, base: number, horizontal: boolean, width: number, height: number }} BarProps */
 
 /**
  * Helper function to get the bounds of the bar regardless of the orientation
@@ -10,7 +13,7 @@ import {PI, HALF_PI} from '../helpers/helpers.math';
  * @private
  */
 function getBarBounds(bar, useFinalPosition) {
-  const {x, y, base, width, height} = bar.getProps(['x', 'y', 'base', 'width', 'height'], useFinalPosition);
+  const {x, y, base, width, height} = /** @type {BarProps} */ (bar.getProps(['x', 'y', 'base', 'width', 'height'], useFinalPosition));
 
   let left, right, top, bottom, half;
 
@@ -31,47 +34,13 @@ function getBarBounds(bar, useFinalPosition) {
   return {left, top, right, bottom};
 }
 
-function parseBorderSkipped(bar) {
-  let edge = bar.options.borderSkipped;
-  const res = {};
-
-  if (!edge) {
-    return res;
-  }
-
-  edge = bar.horizontal
-    ? parseEdge(edge, 'left', 'right', bar.base > bar.x)
-    : parseEdge(edge, 'bottom', 'top', bar.base < bar.y);
-
-  res[edge] = true;
-  return res;
-}
-
-function parseEdge(edge, a, b, reverse) {
-  if (reverse) {
-    edge = swap(edge, a, b);
-    edge = startEnd(edge, b, a);
-  } else {
-    edge = startEnd(edge, a, b);
-  }
-  return edge;
-}
-
-function swap(orig, v1, v2) {
-  return orig === v1 ? v2 : orig === v2 ? v1 : orig;
-}
-
-function startEnd(v, start, end) {
-  return v === 'start' ? start : v === 'end' ? end : v;
-}
-
 function skipOrLimit(skip, value, min, max) {
-  return skip ? 0 : Math.max(Math.min(value, max), min);
+  return skip ? 0 : _limitValue(value, min, max);
 }
 
 function parseBorderWidth(bar, maxW, maxH) {
   const value = bar.options.borderWidth;
-  const skip = parseBorderSkipped(bar);
+  const skip = bar.borderSkipped;
   const o = toTRBL(value);
 
   return {
@@ -83,16 +52,21 @@ function parseBorderWidth(bar, maxW, maxH) {
 }
 
 function parseBorderRadius(bar, maxW, maxH) {
+  const {enableBorderRadius} = bar.getProps(['enableBorderRadius']);
   const value = bar.options.borderRadius;
   const o = toTRBLCorners(value);
   const maxR = Math.min(maxW, maxH);
-  const skip = parseBorderSkipped(bar);
+  const skip = bar.borderSkipped;
+
+  // If the value is an object, assume the user knows what they are doing
+  // and apply as directed.
+  const enableBorder = enableBorderRadius || isObject(value);
 
   return {
-    topLeft: skipOrLimit(skip.top || skip.left, o.topLeft, 0, maxR),
-    topRight: skipOrLimit(skip.top || skip.right, o.topRight, 0, maxR),
-    bottomLeft: skipOrLimit(skip.bottom || skip.left, o.bottomLeft, 0, maxR),
-    bottomRight: skipOrLimit(skip.bottom || skip.right, o.bottomRight, 0, maxR)
+    topLeft: skipOrLimit(!enableBorder || skip.top || skip.left, o.topLeft, 0, maxR),
+    topRight: skipOrLimit(!enableBorder || skip.top || skip.right, o.topRight, 0, maxR),
+    bottomLeft: skipOrLimit(!enableBorder || skip.bottom || skip.left, o.bottomLeft, 0, maxR),
+    bottomRight: skipOrLimit(!enableBorder || skip.bottom || skip.right, o.bottomRight, 0, maxR)
   };
 }
 
@@ -133,45 +107,12 @@ function inRange(bar, x, y, useFinalPosition) {
   const bounds = bar && !skipBoth && getBarBounds(bar, useFinalPosition);
 
   return bounds
-		&& (skipX || x >= bounds.left && x <= bounds.right)
-		&& (skipY || y >= bounds.top && y <= bounds.bottom);
+		&& (skipX || _isBetween(x, bounds.left, bounds.right))
+		&& (skipY || _isBetween(y, bounds.top, bounds.bottom));
 }
 
 function hasRadius(radius) {
   return radius.topLeft || radius.topRight || radius.bottomLeft || radius.bottomRight;
-}
-
-/**
- * Add a path of a rectangle with rounded corners to the current sub-path
- * @param {CanvasRenderingContext2D} ctx Context
- * @param {*} rect Bounding rect
- */
-function addRoundedRectPath(ctx, rect) {
-  const {x, y, w, h, radius} = rect;
-
-  // top left arc
-  ctx.arc(x + radius.topLeft, y + radius.topLeft, radius.topLeft, -HALF_PI, PI, true);
-
-  // line from top left to bottom left
-  ctx.lineTo(x, y + h - radius.bottomLeft);
-
-  // bottom left arc
-  ctx.arc(x + radius.bottomLeft, y + h - radius.bottomLeft, radius.bottomLeft, PI, HALF_PI, true);
-
-  // line from bottom left to bottom right
-  ctx.lineTo(x + w - radius.bottomRight, y + h);
-
-  // bottom right arc
-  ctx.arc(x + w - radius.bottomRight, y + h - radius.bottomRight, radius.bottomRight, HALF_PI, 0, true);
-
-  // line from bottom right to top right
-  ctx.lineTo(x + w, y + radius.topRight);
-
-  // top right arc
-  ctx.arc(x + w - radius.topRight, y + radius.topRight, radius.topRight, 0, -HALF_PI, true);
-
-  // line from top right to top left
-  ctx.lineTo(x + radius.topLeft, y);
 }
 
 /**
@@ -183,7 +124,42 @@ function addNormalRectPath(ctx, rect) {
   ctx.rect(rect.x, rect.y, rect.w, rect.h);
 }
 
+function inflateRect(rect, amount, refRect = {}) {
+  const x = rect.x !== refRect.x ? -amount : 0;
+  const y = rect.y !== refRect.y ? -amount : 0;
+  const w = (rect.x + rect.w !== refRect.x + refRect.w ? amount : 0) - x;
+  const h = (rect.y + rect.h !== refRect.y + refRect.h ? amount : 0) - y;
+  return {
+    x: rect.x + x,
+    y: rect.y + y,
+    w: rect.w + w,
+    h: rect.h + h,
+    radius: rect.radius
+  };
+}
+
 export default class BarElement extends Element {
+
+  static id = 'bar';
+
+  /**
+   * @type {any}
+   */
+  static defaults = {
+    borderSkipped: 'start',
+    borderWidth: 0,
+    borderRadius: 0,
+    inflateAmount: 'auto',
+    pointStyle: undefined
+  };
+
+  /**
+   * @type {any}
+   */
+  static defaultRoutes = {
+    backgroundColor: 'backgroundColor',
+    borderColor: 'borderColor'
+  };
 
   constructor(cfg) {
     super();
@@ -193,6 +169,7 @@ export default class BarElement extends Element {
     this.base = undefined;
     this.width = undefined;
     this.height = undefined;
+    this.inflateAmount = undefined;
 
     if (cfg) {
       Object.assign(this, cfg);
@@ -200,7 +177,7 @@ export default class BarElement extends Element {
   }
 
   draw(ctx) {
-    const options = this.options;
+    const {inflateAmount, options: {borderColor, backgroundColor}} = this;
     const {inner, outer} = boundingRects(this);
     const addRectPath = hasRadius(outer.radius) ? addRoundedRectPath : addNormalRectPath;
 
@@ -208,16 +185,16 @@ export default class BarElement extends Element {
 
     if (outer.w !== inner.w || outer.h !== inner.h) {
       ctx.beginPath();
-      addRectPath(ctx, outer);
+      addRectPath(ctx, inflateRect(outer, inflateAmount, inner));
       ctx.clip();
-      addRectPath(ctx, inner);
-      ctx.fillStyle = options.borderColor;
+      addRectPath(ctx, inflateRect(inner, -inflateAmount, outer));
+      ctx.fillStyle = borderColor;
       ctx.fill('evenodd');
     }
 
     ctx.beginPath();
-    addRectPath(ctx, inner);
-    ctx.fillStyle = options.backgroundColor;
+    addRectPath(ctx, inflateRect(inner, inflateAmount));
+    ctx.fillStyle = backgroundColor;
     ctx.fill();
 
     ctx.restore();
@@ -236,7 +213,7 @@ export default class BarElement extends Element {
   }
 
   getCenterPoint(useFinalPosition) {
-    const {x, y, base, horizontal} = this.getProps(['x', 'y', 'base', 'horizontal'], useFinalPosition);
+    const {x, y, base, horizontal} = /** @type {BarProps} */ (this.getProps(['x', 'y', 'base', 'horizontal'], useFinalPosition));
     return {
       x: horizontal ? (x + base) / 2 : x,
       y: horizontal ? y : (y + base) / 2
@@ -247,23 +224,3 @@ export default class BarElement extends Element {
     return axis === 'x' ? this.width / 2 : this.height / 2;
   }
 }
-
-BarElement.id = 'bar';
-
-/**
- * @type {any}
- */
-BarElement.defaults = {
-  borderSkipped: 'start',
-  borderWidth: 0,
-  borderRadius: 0,
-  pointStyle: undefined
-};
-
-/**
- * @type {any}
- */
-BarElement.defaultRoutes = {
-  backgroundColor: 'backgroundColor',
-  borderColor: 'borderColor'
-};
